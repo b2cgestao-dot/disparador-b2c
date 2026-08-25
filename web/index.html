@@ -225,7 +225,18 @@
               </div>
             </div>
           </div>
-          <div data-tab-panel="fluxos" class="p-6" hidden><p class="text-sm text-slate-500">Fluxos: em construcao (T9).</p></div>
+          <div data-tab-panel="fluxos" class="p-6 space-y-4" hidden>
+            <div class="flex items-center justify-between gap-4">
+              <p class="text-sm text-slate-600">Quando o lead clica num botao de resposta rapida do template cujo texto casa o <b>gatilho</b>, o fluxo responde sozinho (marcado como "Fluxo automatico"). Botoes de link/ligar nao disparam.</p>
+              <button id="flow-new" class="bg-green-600 hover:bg-green-700 text-white text-sm rounded-lg px-3 py-2 whitespace-nowrap">+ Novo fluxo</button>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead class="bg-slate-50 text-slate-500 text-left text-xs uppercase"><tr><th class="px-4 py-2">Nome</th><th class="px-4 py-2">Gatilho</th><th class="px-4 py-2">Conta</th><th class="px-4 py-2">Passos</th><th class="px-4 py-2">Ativo</th><th class="px-4 py-2 text-right">Acoes</th></tr></thead>
+                <tbody id="flow-rows"><tr><td colspan="6" class="px-4 py-6 text-center text-slate-400">carregando...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
           <div data-tab-panel="relatorio" class="p-6 space-y-4" hidden>
             <div class="flex flex-wrap items-end gap-2 text-sm">
               <label class="block">Disparo<select id="rep-job" class="mt-1 border rounded-lg px-2 py-1.5"><option value="">Todos</option></select></label>
@@ -321,6 +332,28 @@
     </div>
     <p id="tpl-form-error" class="text-red-600" hidden></p>
     <div class="flex justify-end gap-2 pt-2"><button type="button" id="tpl-cancel" class="px-3 py-2 rounded-lg border">Cancelar</button><button type="submit" id="tpl-save" class="px-3 py-2 rounded-lg bg-green-600 text-white">Criar na Meta</button></div>
+  </form>
+</dialog>
+
+<!-- dialog: fluxo -->
+<dialog id="flow-dialog" class="rounded-2xl p-0 w-full max-w-2xl shadow-xl backdrop:bg-black/40">
+  <form id="flow-form" method="dialog" class="p-6 space-y-3 text-sm">
+    <h3 id="flow-form-title" class="font-semibold text-base">Novo fluxo</h3>
+    <input type="hidden" name="id" />
+    <div class="grid grid-cols-2 gap-3">
+      <label class="block">Nome *<input name="name" required class="mt-1 w-full border rounded-lg px-3 py-2" placeholder="Interessados" /></label>
+      <label class="block">Conta<select name="account_id" class="mt-1 w-full border rounded-lg px-3 py-2"><option value="">Todas as contas</option></select></label>
+      <label class="block">Gatilho (texto do botao) *<input name="trigger_text" required class="mt-1 w-full border rounded-lg px-3 py-2" placeholder="Quero saber mais" /></label>
+      <div class="flex flex-col justify-end gap-1">
+        <label class="flex items-center gap-2"><input name="match_text" type="checkbox" /> Tambem disparar se o lead <b>digitar</b> o gatilho</label>
+        <label class="flex items-center gap-2"><input name="active" type="checkbox" checked /> Ativo</label>
+      </div>
+    </div>
+    <div class="flex items-center justify-between"><div class="text-xs uppercase text-slate-400">Passos</div><button type="button" id="flow-add-step" class="text-xs px-2 py-1 rounded border">+ passo</button></div>
+    <div id="flow-steps" class="space-y-2"></div>
+    <p class="text-xs text-slate-400">Variaveis no texto: {{nome}} e {{telefone}}. Acoes: <code>add_tag:vip</code>, <code>remove_tag:lead</code>, <code>opt_out</code>, <code>opt_in</code>, <code>close</code> (separe por ; ). Passo com template envia mesmo fora da janela de 24h; texto so dentro dela.</p>
+    <p id="flow-form-error" class="text-red-600" hidden></p>
+    <div class="flex justify-end gap-2 pt-2"><button type="button" id="flow-cancel" class="px-3 py-2 rounded-lg border">Cancelar</button><button type="submit" id="flow-save" class="px-3 py-2 rounded-lg bg-green-600 text-white">Salvar</button></div>
   </form>
 </dialog>
 
@@ -957,6 +990,84 @@ $('#rep-job').addEventListener('change', (ev) => { Rep.job = ev.target.value; re
 $('#rep-account').addEventListener('change', (ev) => { Rep.account = ev.target.value; repLoad(); });
 $('#rep-status').addEventListener('change', (ev) => { Rep.status = ev.target.value; repLoad(); });
 $('#rep-refresh').addEventListener('click', repLoad);
+
+// ============================================================ [T9] FLUXOS ====
+const Flows = { list: [] };
+App.flows = Flows;
+async function flowsInit() {
+  if (!App.accounts.length) { try { App.accounts = await apiFetch('/api-oficial/accounts'); } catch {} }
+  await flowsLoad();
+}
+App.hooks.onTab.fluxos = flowsInit;
+async function flowsLoad() {
+  try { Flows.list = await apiFetch('/api-oficial/flows'); } catch (e) { $('#flow-rows').innerHTML = `<tr><td colspan="6" class="px-4 py-6 text-center text-red-600">${esc(e.message)}</td></tr>`; return; }
+  const tb = $('#flow-rows');
+  if (!Flows.list.length) { tb.innerHTML = '<tr><td colspan="6" class="px-4 py-6 text-center text-slate-400">Nenhum fluxo. Clique em "+ Novo fluxo".</td></tr>'; return; }
+  tb.innerHTML = Flows.list.map((f) => `<tr data-flow-id="${f.id}" class="border-t align-top">
+    <td class="px-4 py-3 font-medium">${esc(f.name)}</td><td class="px-4 py-3"><span class="badge bg-violet-100 text-violet-800">${esc(f.trigger_text)}</span>${f.match_text ? ' <span class="text-[10px] text-slate-400">+texto</span>' : ''}</td>
+    <td class="px-4 py-3 text-xs">${esc(f.account?.label || 'Todas')}</td>
+    <td class="px-4 py-3 text-xs text-slate-600">${(f.steps || []).map((st, i) => `${i + 1}. ${st.delay_s ? `(+${st.delay_s}s) ` : ''}${esc(st.template ? '[template ' + st.template.name + ']' : (st.text || '').slice(0, 60))}${(st.actions || []).length ? ' <span class="text-slate-400">' + st.actions.map((a) => a.type + (a.tag ? ':' + a.tag : '')).join(', ') + '</span>' : ''}`).join('<br>')}</td>
+    <td class="px-4 py-3">${badge(f.active, f.active ? 'ativo' : 'inativo')}</td>
+    <td class="px-4 py-3 text-right whitespace-nowrap space-x-1"><button data-act="toggle" class="px-2 py-1 rounded border text-xs">${f.active ? 'Desativar' : 'Ativar'}</button><button data-act="edit" class="px-2 py-1 rounded border text-xs">Editar</button><button data-act="delete" class="px-2 py-1 rounded border text-xs text-red-600">Excluir</button></td>
+  </tr>`).join('');
+}
+function flowStepRow(i, st = {}) {
+  return `<div class="border rounded-lg p-2 grid grid-cols-[70px_1fr_auto] gap-2 items-start" data-step="${i}">
+    <label class="text-xs">Delay (s)<input id="flow-step-delay-${i}" type="number" min="0" step="1" value="${Number(st.delay_s) || 0}" class="mt-1 w-full border rounded px-2 py-1" /></label>
+    <div class="space-y-1">
+      <textarea id="flow-step-text-${i}" rows="2" class="w-full border rounded px-2 py-1" placeholder="Texto da resposta (ou deixe vazio e use template)">${esc(st.text || '')}</textarea>
+      <div class="grid grid-cols-2 gap-2">
+        <input id="flow-step-template-${i}" class="border rounded px-2 py-1 text-xs" placeholder="template opcional: nome|idioma (ex.: hello_world|en_US)" value="${st.template ? esc(st.template.name + '|' + (st.template.language || 'pt_BR')) : ''}" />
+        <input id="flow-step-actions-${i}" class="border rounded px-2 py-1 text-xs" placeholder="acoes: add_tag:vip; opt_out; close" value="${esc((st.actions || []).map((a) => a.type + (a.tag ? ':' + a.tag : '')).join('; '))}" />
+      </div>
+    </div>
+    <button type="button" data-remove-step="${i}" class="text-xs text-red-600 px-2 py-1">x</button>
+  </div>`;
+}
+function flowRenderSteps(steps) { $('#flow-steps').innerHTML = steps.map((st, i) => flowStepRow(i, st)).join(''); }
+function flowReadSteps() {
+  return $$('#flow-steps [data-step]').map((el) => {
+    const i = el.dataset.step;
+    const tpl = $(`#flow-step-template-${i}`).value.trim();
+    const actions = $(`#flow-step-actions-${i}`).value.split(/[;,]/).map((x) => x.trim()).filter(Boolean).map((x) => { const [type, tag] = x.split(':').map((y) => y.trim()); return tag ? { type, tag } : { type }; });
+    return { delay_s: Number($(`#flow-step-delay-${i}`).value) || 0, text: $(`#flow-step-text-${i}`).value.trim(), ...(tpl ? { template: { name: tpl.split('|')[0].trim(), language: (tpl.split('|')[1] || 'pt_BR').trim() } } : {}), actions };
+  });
+}
+function openFlowForm(f) {
+  const form = $('#flow-form'); form.reset(); $('#flow-form-error').hidden = true;
+  $('#flow-form-title').textContent = f ? 'Editar fluxo' : 'Novo fluxo';
+  form.elements.account_id.innerHTML = '<option value="">Todas as contas</option>' + App.accounts.map((a) => `<option value="${a.id}">${esc(a.label)}</option>`).join('');
+  form.elements.id.value = f?.id || ''; form.elements.name.value = f?.name || ''; form.elements.trigger_text.value = f?.trigger_text || '';
+  form.elements.account_id.value = f?.account_id || ''; form.elements.match_text.checked = !!f?.match_text; form.elements.active.checked = f ? !!f.active : true;
+  flowRenderSteps(f?.steps?.length ? f.steps : [{}]);
+  $('#flow-dialog').showModal();
+}
+$('#flow-new').addEventListener('click', () => openFlowForm(null));
+$('#flow-cancel').addEventListener('click', () => $('#flow-dialog').close());
+$('#flow-add-step').addEventListener('click', () => { const steps = flowReadSteps(); steps.push({}); flowRenderSteps(steps); });
+$('#flow-steps').addEventListener('click', (ev) => { const b = ev.target.closest('[data-remove-step]'); if (!b) return; const steps = flowReadSteps(); steps.splice(Number(b.dataset.removeStep), 1); flowRenderSteps(steps.length ? steps : [{}]); });
+$('#flow-form').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const f = ev.target; const err = $('#flow-form-error'); err.hidden = true;
+  const body = { name: f.elements.name.value.trim(), trigger_text: f.elements.trigger_text.value.trim(), account_id: f.elements.account_id.value || null, match_text: f.elements.match_text.checked, active: f.elements.active.checked, steps: flowReadSteps() };
+  const id = f.elements.id.value;
+  $('#flow-save').disabled = true;
+  try {
+    if (id) await apiFetch(`/api-oficial/flows/${id}`, { method: 'PUT', body }); else await apiFetch('/api-oficial/flows', { method: 'POST', body });
+    $('#flow-dialog').close(); toast('Fluxo salvo', 'ok'); flowsLoad();
+  } catch (e) { err.textContent = (e.data?.error || e.message) + (e.data?.detail ? ' - ' + e.data.detail : ''); err.hidden = false; }
+  finally { $('#flow-save').disabled = false; }
+});
+$('#flow-rows').addEventListener('click', async (ev) => {
+  const btn = ev.target.closest('button[data-act]'); if (!btn) return;
+  const id = btn.closest('tr').dataset.flowId; const f = Flows.list.find((x) => x.id === id);
+  try {
+    if (btn.dataset.act === 'edit') return openFlowForm(f);
+    if (btn.dataset.act === 'toggle') { await apiFetch(`/api-oficial/flows/${id}`, { method: 'PUT', body: { active: !f.active } }); }
+    if (btn.dataset.act === 'delete') { if (!confirm(`Excluir o fluxo "${f.name}"?`)) return; await apiFetch(`/api-oficial/flows/${id}`, { method: 'DELETE' }); }
+    await flowsLoad();
+  } catch (e) { toast(e.message, 'error'); }
+});
 
 // ---- boot ----
 (async () => {

@@ -64,6 +64,7 @@ const onlyDigits = (s) => String(s ?? '').replace(/\D/g, '');
 const nowIso = () => new Date().toISOString();
 const hoursFromNow = (h) => new Date(Date.now() + h * 3600 * 1000).toISOString();
 const SECRET_FIELDS = ['access_token', 'app_secret'];
+let waOnInbound = null; // gancho dos fluxos (secao [10]): (account, contact, conversation, message) => Promise
 function publicAccount(row) {
   if (!row) return row;
   const out = { ...row };
@@ -429,6 +430,122 @@ async function runBroadcast(job) {
   job.done = true; job.finished_at = nowIso();
   app.log.info({ job: job.id, sent: job.sent, failed: job.failed, skipped: job.skipped }, 'disparo concluido');
 }
+
+// ---------------------------------------------------------------- [10] fluxos (motor)
+const normText = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+const FLOW_ACTIONS = ['add_tag', 'remove_tag', 'opt_out', 'opt_in', 'close'];
+const NON_REPLY_BUTTONS = ['URL', 'PHONE_NUMBER', 'COPY_CODE', 'FLOW', 'CATALOG', 'MPM', 'OTP', 'VOICE_CALL'];
+const MAX_FLOW_DELAY_S = 7 * 24 * 3600;
+
+function validateFlow(b, { partial = false } = {}) {
+  const out = {};
+  if (b.name !== undefined || !partial) { const name = String(b.name || '').trim(); if (!name) return { error: 'NOME_OBRIGATORIO' }; out.name = name; }
+  if (b.trigger_text !== undefined || !partial) { const t = String(b.trigger_text || '').trim(); if (!t) return { error: 'GATILHO_OBRIGATORIO' }; out.trigger_text = t; }
+  if (b.account_id !== undefined) { if (b.account_id !== null && !isUuid(b.account_id)) return { error: 'ACCOUNT_ID_INVALIDO' }; out.account_id = b.account_id; }
+  if (b.active !== undefined) out.active = !!b.active;
+  if (b.match_text !== undefined) out.match_text = !!b.match_text;
+  if (b.steps !== undefined || !partial) {
+    if (!Array.isArray(b.steps)) return { error: 'STEPS_INVALIDOS' };
+    const steps = [];
+    for (const [i, st] of b.steps.entries()) {
+      if (!st || typeof st !== 'object') return { error: 'STEPS_INVALIDOS', detail: `passo ${i + 1}` };
+      const step = {};
+      const delay = Number(st.delay_s || 0);
+      if (!Number.isFinite(delay) || delay < 0 || delay > MAX_FLOW_DELAY_S) return { error: 'DELAY_INVALIDO', detail: `passo ${i + 1}` };
+      step.delay_s = delay;
+      if (st.text && String(st.text).trim()) step.text = String(st.text).trim();
+      if (st.template?.name) step.template = { name: String(st.template.name).trim(), language: String(st.template.language || 'pt_BR').trim() };
+      const actions = Array.isArray(st.actions) ? st.actions : [];
+      step.actions = [];
+      for (const a of actions) {
+        const type = String(a?.type || '').trim();
+        if (!FLOW_ACTIONS.includes(type)) return { error: 'ACAO_INVALIDA', detail: `passo ${i + 1}: ${type || '?'}`, permitidas: FLOW_ACTIONS };
+        if ((type === 'add_tag' || type === 'remove_tag') && !String(a.tag || '').trim()) return { error: 'ACAO_SEM_TAG', detail: `passo ${i + 1}` };
+        step.actions.push(type.endsWith('_tag') ? { type, tag: String(a.tag).trim() } : { type });
+      }
+      if (!step.text && !step.template && !step.actions.length) return { error: 'PASSO_VAZIO', detail: `passo ${i + 1}: informe texto, template ou acao` };
+      steps.push(step);
+    }
+    out.steps = steps;
+  }
+  return { value: out };
+}
+const renderFlowText = (text, contact) => String(text || '')
+  .replace(/\{\{\s*(nome|name)\s*\}\}/gi, contact?.name || '')
+  .replace(/\{\{\s*(telefone|phone)\s*\}\}/gi, contact?.phone || '');
+
+async function waApplyActions(actions, contact, conversation) {
+  if (!actions?.length) return;
+  const patch = {}; let tags = [...(contact.tags || [])]; let tagsChanged = false;
+  for (const a of actions) {
+    if (a.type === 'add_tag' && !tags.includes(a.tag)) { tags.push(a.tag); tagsChanged = true; }
+    if (a.type === 'remove_tag' && tags.includes(a.tag)) { tags = tags.filter((t) => t !== a.tag); tagsChanged = true; }
+    if (a.type === 'opt_out') patch.opt_out = true;
+    if (a.type === 'opt_in') patch.opt_out = false;
+    if (a.type === 'close') await sb.from('wa_conversations').update({ status: 'closed', closed_at: nowIso() }).eq('id', conversation.id);
+  }
+  if (tagsChanged) patch.tags = tags;
+  if (Object.keys(patch).length) await sb.from('wa_contacts').update(patch).eq('id', contact.id);
+}
+async function waSendFlowStep(flow, step, ctx) {
+  const conv = await getConversation(ctx.conversation.id);
+  if (!conv) return;
+  const contact = conv.contact; const account = ctx.account;
+  if (step.template?.name) {
+    await waSendAndRecord({ account, conversation: conv, contact, kind: 'template', template: step.template, isFlow: true, flowId: flow.id });
+  } else if (step.text) {
+    const text = renderFlowText(step.text, contact);
+    if (!windowOpen(conv)) { // anti-bug #12: fluxo tambem respeita a janela
+      await sb.from('wa_messages').insert({ conversation_id: conv.id, account_id: account.id, contact_id: contact.id, direction: 'out', type: 'text', body: text, status: 'failed', is_flow: true, flow_id: flow.id, error: { code: 'JANELA_FECHADA', message: 'Fluxo: fora da janela de 24h. Use um passo de template.' } });
+    } else {
+      await waSendAndRecord({ account, conversation: conv, contact, kind: 'text', text, isFlow: true, flowId: flow.id });
+    }
+  }
+  await waApplyActions(step.actions, contact, conv);
+}
+async function waRunFlow(flow, ctx) {
+  for (const step of flow.steps || []) {
+    const d = Number(step.delay_s) || 0;
+    if (d > 0) await sleep(d * 1000);
+    try { await waSendFlowStep(flow, step, ctx); }
+    catch (e) { app.log.error({ err: e, flow: flow.id }, 'erro no passo do fluxo'); }
+  }
+}
+async function waFindFlows(account, text) {
+  const t = normText(text);
+  if (!t) return [];
+  const { data, error } = await sb.from('wa_flows').select('*').eq('active', true).or(`account_id.eq.${account.id},account_id.is.null`).order('created_at');
+  if (error) throw error;
+  return (data || []).filter((f) => normText(f.trigger_text) === t).sort((a, b) => (a.account_id ? 0 : 1) - (b.account_id ? 0 : 1));
+}
+// Botao de URL/ligar/copiar (nao e resposta rapida) nao dispara fluxo
+async function isNonReplyButton(account, message) {
+  const ctxId = message.payload?.context?.id;
+  if (!ctxId) return false;
+  const { data: tplMsg } = await sb.from('wa_messages').select('template_name').eq('wamid', ctxId).maybeSingle();
+  if (!tplMsg?.template_name) return false;
+  const { data: tpls } = await sb.from('wa_templates').select('components').eq('account_id', account.id).eq('name', tplMsg.template_name);
+  const text = normText(message.body);
+  for (const t of tpls || []) for (const c of t.components || []) if (c.type === 'BUTTONS') {
+    for (const b of c.buttons || []) if (normText(b.text) === text && NON_REPLY_BUTTONS.includes(String(b.type || '').toUpperCase())) return true;
+  }
+  return false;
+}
+waOnInbound = async (account, contact, conversation, message) => {
+  const isButton = message.type === 'button' || (message.type === 'interactive' && !!message.payload?.interactive?.button_reply);
+  const isText = message.type === 'text';
+  if (!isButton && !isText) return;
+  const candidates = [...new Set([message.body, message.payload?.button?.payload, message.payload?.interactive?.button_reply?.id].filter(Boolean))];
+  let flows = [];
+  for (const c of candidates) { flows = await waFindFlows(account, c); if (flows.length) break; }
+  if (isText) flows = flows.filter((f) => f.match_text);
+  if (!flows.length) return;
+  if (isButton && await isNonReplyButton(account, message)) return;
+  for (const flow of flows) {
+    app.log.info({ flow: flow.id, name: flow.name, contact: contact.id }, 'fluxo disparado');
+    await waRunFlow(flow, { account, contact, conversation, message });
+  }
+};
 
 app.register(async function apiOficial(api) {
   api.addHook('preHandler', requireAuth);
@@ -821,6 +938,46 @@ app.register(async function apiOficial(api) {
     return { summary, rows };
   });
 
+  // ---- [10] fluxos (CRUD) ----
+  const FLOW_SELECT = '*, account:whatsapp_api_accounts(id,label)';
+  api.get('/flows', async (req, reply) => {
+    const { data, error } = await sb.from('wa_flows').select(FLOW_SELECT).order('created_at');
+    if (error) return dbFail(reply, error, 'list flows');
+    return data;
+  });
+  api.get('/flows/:id', async (req, reply) => {
+    if (!isUuid(req.params.id)) return httpError(reply, 404, 'FLUXO_NAO_ENCONTRADO');
+    const { data, error } = await sb.from('wa_flows').select(FLOW_SELECT).eq('id', req.params.id).maybeSingle();
+    if (error) return dbFail(reply, error, 'get flow');
+    if (!data) return httpError(reply, 404, 'FLUXO_NAO_ENCONTRADO');
+    return data;
+  });
+  api.post('/flows', async (req, reply) => {
+    const v = validateFlow(req.body || {});
+    if (v.error) return httpError(reply, 400, v.error, { detail: v.detail, permitidas: v.permitidas });
+    const row = { active: true, match_text: false, account_id: null, ...v.value };
+    const { data, error } = await sb.from('wa_flows').insert(row).select(FLOW_SELECT).single();
+    if (error) return dbFail(reply, error, 'create flow');
+    return reply.code(201).send(data);
+  });
+  api.put('/flows/:id', async (req, reply) => {
+    if (!isUuid(req.params.id)) return httpError(reply, 404, 'FLUXO_NAO_ENCONTRADO');
+    const v = validateFlow(req.body || {}, { partial: true });
+    if (v.error) return httpError(reply, 400, v.error, { detail: v.detail, permitidas: v.permitidas });
+    if (!Object.keys(v.value).length) return httpError(reply, 400, 'NADA_PARA_ATUALIZAR');
+    const { data, error } = await sb.from('wa_flows').update(v.value).eq('id', req.params.id).select(FLOW_SELECT).maybeSingle();
+    if (error) return dbFail(reply, error, 'update flow');
+    if (!data) return httpError(reply, 404, 'FLUXO_NAO_ENCONTRADO');
+    return data;
+  });
+  api.delete('/flows/:id', async (req, reply) => {
+    if (!isUuid(req.params.id)) return httpError(reply, 404, 'FLUXO_NAO_ENCONTRADO');
+    const { data, error } = await sb.from('wa_flows').delete().eq('id', req.params.id).select('id');
+    if (error) return dbFail(reply, error, 'delete flow');
+    if (!data?.length) return httpError(reply, 404, 'FLUXO_NAO_ENCONTRADO');
+    return { ok: true, id: req.params.id };
+  });
+
   // >>> [api-oficial] proximas rotas (inbox, templates, disparo, fluxos) entram aqui
 }, { prefix: '/api-oficial' });
 
@@ -830,7 +987,6 @@ const MIME_EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp'
 const extFromMime = (mime) => MIME_EXT[String(mime || '').split(';')[0].trim()] || 'bin';
 const publicMediaUrl = (p) => `${SUPABASE_PUBLIC_URL}/storage/v1/object/public/wa-media/${p.split('/').map(encodeURIComponent).join('/')}`;
 const STATUS_RANK = { received: 0, queued: 0, accepted: 1, sent: 2, delivered: 3, read: 4, failed: 9 };
-let waOnInbound = null; // gancho preenchido pelos fluxos (T9): (account, contact, conversation, message) => Promise
 
 // Anti-bug #3: assinatura sobre o corpo CRU, comparacao em tempo constante.
 function verifySignature(rawBody, header, appSecret) {

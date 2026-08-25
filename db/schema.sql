@@ -255,3 +255,4 @@ create policy "wa-media leitura publica" on storage.objects
 -- Evolucoes (add column if not exists mantem a idempotencia)
 -- ============================================================================
 alter table public.whatsapp_api_sends add column if not exists delivery_status text; -- accepted|sent|delivered|read|failed (via webhook de status)
+alter table public.wa_flows add column if not exists match_text boolean not null default false; -- true = texto digitado igual ao gatilho tambem dispara

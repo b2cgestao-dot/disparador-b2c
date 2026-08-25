@@ -174,7 +174,7 @@ Aceitacao:
 
 ---
 
-## [~] T9 - Fluxos (chatbot por botao) - opcional mas incluido
+## [x] T9 - Fluxos (chatbot por botao) - opcional mas incluido
 
 Entrega: `wa_flows` + motor no backend (`waRunFlow`, `waSendFlowStep`,
 `waSendAndRecord`, `waApplyActions`). Botao QUICK_REPLY do template dispara o
@@ -184,12 +184,12 @@ como "Fluxo automatico".
 Endpoints: `GET/POST/PUT/DELETE /api-oficial/flows(/:id)`.
 
 Aceitacao:
-- [ ] Webhook (mock) com clique em botao QUICK_REPLY cujo texto casa um
+- [x] Webhook (mock) com clique em botao QUICK_REPLY cujo texto casa um
       `trigger_text` dispara a resposta automatica, gravada como fluxo.
-- [ ] Clique em botao de URL/ligar NAO dispara fluxo.
-- [ ] Passo com `delay` respeita o atraso antes de enviar.
-- [ ] Acao `add_tag`/`opt_out` altera o contato conforme definido.
-- [ ] Respostas do fluxo respeitam a janela de 24h.
+- [x] Clique em botao de URL/ligar NAO dispara fluxo.
+- [x] Passo com `delay` respeita o atraso antes de enviar.
+- [x] Acao `add_tag`/`opt_out` altera o contato conforme definido.
+- [x] Respostas do fluxo respeitam a janela de 24h.
 
 ---
 
