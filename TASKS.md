@@ -208,11 +208,11 @@ Aceitacao:
 
 ---
 
-## [~] T11 - Relatorio final
+## [x] T11 - Relatorio final
 
 Entrega: `RELATORIO-FINAL.md` conforme secao 9 do CLAUDE.md. Commit final. PARE.
 
 Aceitacao:
-- [ ] Todas as tarefas acima estao `DONE` ou `BLOCKED`.
-- [ ] `./verify.sh all` verde pra tudo que nao esta bloqueado.
-- [ ] Relatorio gerado com o passo a passo de "mock -> producao".
+- [x] Todas as tarefas acima estao `DONE` ou `BLOCKED`.
+- [x] `./verify.sh all` verde pra tudo que nao esta bloqueado.
+- [x] Relatorio gerado com o passo a passo de "mock -> producao".

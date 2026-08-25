@@ -11,8 +11,8 @@ STATUS: TODO | IN_PROGRESS | DONE | BLOCKED
 
 ## Estado atual
 
-- Tarefa em foco: T11 (relatorio final)
-- Ultima stack verde: 2026-08-25 19:15 (`./verify.sh t10` = 0)
+- Tarefa em foco: (nenhuma) - construcao CONCLUIDA. T0..T9 e T11 DONE; T10 BLOCKED (aguarda VPS + dominio + DNS).
+- Ultima stack verde: 2026-08-25 19:30 (`./verify.sh all` = 0, 102/102 testes)
 
 ## Log
 
@@ -27,7 +27,7 @@ STATUS: TODO | IN_PROGRESS | DONE | BLOCKED
 - T8  | DONE | 2026-08-25 18:35 | POST /broadcast -> 202 {job_id,total,invalid,duplicates} na hora; runBroadcast() nao-awaited (rate 1-50 msg/s); GET /broadcast(/:jobId), POST /:jobId/cancel; GET /sends-report {summary, rows[].help{code,motivo,fix}} com WA_ERROR_HELP (~55 codigos em PT). CSV: aspas, "" escapado, CRLF, BOM, separador , ou ;, cabecalho = 1a linha com letras. Telefone <10 digitos descartado, 10-11 digitos ganha 55, dedup. Nome da lista vira tag no contato; opt_out pulado (skipped + skip_reason); variaveis {{n}} do BODY (e HEADER texto) vem das colunas apos o telefone. Cada envio vira wa_messages out (template_name) + whatsapp_api_sends. Front: aba Disparo (previa validos/invalidos/duplicados, template do cache, progresso por polling, cancelar) e aba Relatorio (filtros, motivo + fix em PT). 11 testes verdes.
 - T9  | DONE | 2026-08-25 19:05 | Motor: waOnInbound (gancho do webhook) -> waFindFlows (trigger_text normalizado sem acento/caixa; conta especifica + globais) -> waRunFlow (passos em ordem, delay_s) -> waSendFlowStep (texto com {{nome}}/{{telefone}} via waSendAndRecord is_flow=true; texto fora da janela vira wa_messages failed JANELA_FECHADA; passo template sempre envia) -> waApplyActions (add_tag/remove_tag/opt_out/opt_in/close). So botao (type button / interactive.button_reply) dispara; botao URL/PHONE_NUMBER do template de origem (via context.id) e ignorado; texto digitado so com match_text=true. CRUD /api-oficial/flows com validacao. Front: aba Fluxos (tabela, dialog com passos dinamicos: delay, texto, template opcional, acoes). 10 testes verdes.
 - T10 | BLOCKED | 2026-08-25 19:15 | Artefatos PRONTOS e validados (server/Dockerfile node:22-alpine, docker-compose.prod.yml api+caddy com healthcheck/restart, Caddyfile com no-cache na raiz / + proxy /api/* /whatsapp/* /health, DEPLOY.md runbook scp + compose up -d --build + checklist go-live). `docker compose config` e `caddy validate` passam (7 testes verdes). Deploy real BLOCKED: aguardando VPS + dominio + DNS do dono (CREDENTIALS-TODO.md).
-- T11 | IN_PROGRESS | 2026-08-25 19:16 | RELATORIO-FINAL.md + ./verify.sh all + commit final.
+- T11 | DONE | 2026-08-25 19:30 | RELATORIO-FINAL.md gerado; `./verify.sh all` verde (102 testes em 17 arquivos); commit final. Stack derrubada ao final (modo economico).
 
 ## Blockers abertos
 
