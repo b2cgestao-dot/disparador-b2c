@@ -196,9 +196,51 @@
               </table>
             </div>
           </div>
-          <div data-tab-panel="disparo" class="p-6" hidden><p class="text-sm text-slate-500">Disparo: em construcao (T8).</p></div>
+          <div data-tab-panel="disparo" class="p-6 space-y-4" hidden>
+            <div class="grid md:grid-cols-2 gap-4">
+              <div class="bg-white rounded-xl p-5 shadow-sm space-y-3 text-sm">
+                <div class="grid grid-cols-2 gap-3">
+                  <label class="block">Conta<select id="bc-account" class="mt-1 w-full border rounded-lg px-2 py-1.5"></select></label>
+                  <label class="block">Template (cache)<select id="bc-template" class="mt-1 w-full border rounded-lg px-2 py-1.5"></select></label>
+                  <label class="block">Nome da lista (vira tag)<input id="bc-list-name" class="mt-1 w-full border rounded-lg px-2 py-1.5" placeholder="Ex.: Clientes Agosto" /></label>
+                  <label class="block">Velocidade<select id="bc-rate" class="mt-1 w-full border rounded-lg px-2 py-1.5"><option value="2">2 msg/s (seguro)</option><option value="5" selected>5 msg/s</option><option value="10">10 msg/s</option><option value="20">20 msg/s</option></select></label>
+                </div>
+                <label class="block">Arquivo CSV <span class="text-slate-400">(telefone, nome, var2, var3... - 1a linha pode ser cabecalho)</span><input id="bc-file" type="file" accept=".csv,text/csv,text/plain" class="mt-1 w-full text-xs" /></label>
+                <textarea id="bc-csv" rows="8" class="w-full border rounded-lg px-3 py-2 font-mono text-xs" placeholder="telefone,nome&#10;5511999990001,Maria&#10;5511999990002,&quot;Silva, Joao&quot;"></textarea>
+                <div id="bc-preview" class="text-xs text-slate-600"></div>
+                <div class="flex items-center gap-2">
+                  <button id="bc-send" class="bg-green-600 hover:bg-green-700 text-white rounded-lg px-4 py-2">Disparar</button>
+                  <span class="text-xs text-slate-400">Contatos com opt-out sao pulados automaticamente.</span>
+                </div>
+              </div>
+              <div class="bg-white rounded-xl p-5 shadow-sm space-y-3 text-sm">
+                <div><div class="text-xs uppercase text-slate-400 mb-1">Previa do template</div><div id="bc-template-preview" class="bg-slate-50 rounded-lg p-3 whitespace-pre-wrap text-slate-700">Escolha um template.</div></div>
+                <div id="bc-status" hidden>
+                  <div class="text-xs uppercase text-slate-400 mb-1">Disparo em andamento</div>
+                  <div class="h-3 bg-slate-200 rounded-full overflow-hidden"><div id="bc-progress" class="h-3 bg-green-600 transition-all" style="width:0%"></div></div>
+                  <div id="bc-summary" class="mt-2 text-slate-700"></div>
+                  <div class="mt-2 flex gap-2"><button id="bc-cancel" class="px-3 py-1.5 rounded-lg border text-xs">Cancelar</button><button id="bc-open-report" class="px-3 py-1.5 rounded-lg border text-xs">Ver relatorio</button></div>
+                </div>
+                <div><div class="text-xs uppercase text-slate-400 mb-1">Disparos recentes (desde o ultimo reinicio)</div><div id="bc-jobs" class="space-y-1 text-xs text-slate-600">-</div></div>
+              </div>
+            </div>
+          </div>
           <div data-tab-panel="fluxos" class="p-6" hidden><p class="text-sm text-slate-500">Fluxos: em construcao (T9).</p></div>
-          <div data-tab-panel="relatorio" class="p-6" hidden><p class="text-sm text-slate-500">Relatorio: em construcao (T8).</p></div>
+          <div data-tab-panel="relatorio" class="p-6 space-y-4" hidden>
+            <div class="flex flex-wrap items-end gap-2 text-sm">
+              <label class="block">Disparo<select id="rep-job" class="mt-1 border rounded-lg px-2 py-1.5"><option value="">Todos</option></select></label>
+              <label class="block">Conta<select id="rep-account" class="mt-1 border rounded-lg px-2 py-1.5"><option value="">Todas</option></select></label>
+              <label class="block">Status<select id="rep-status" class="mt-1 border rounded-lg px-2 py-1.5"><option value="">Todos</option><option value="sent">Enviados</option><option value="failed">Falhas</option><option value="skipped">Pulados</option></select></label>
+              <button id="rep-refresh" class="px-3 py-1.5 rounded-lg border">Atualizar</button>
+              <span id="rep-summary" class="text-xs text-slate-600"></span>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead class="bg-slate-50 text-slate-500 text-left text-xs uppercase"><tr><th class="px-3 py-2">Quando</th><th class="px-3 py-2">Telefone</th><th class="px-3 py-2">Nome</th><th class="px-3 py-2">Lista / Template</th><th class="px-3 py-2">Status</th><th class="px-3 py-2">Entrega</th><th class="px-3 py-2">Erro (motivo e o que fazer)</th></tr></thead>
+                <tbody id="rep-rows"><tr><td colspan="7" class="px-3 py-6 text-center text-slate-400">Sem dados.</td></tr></tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -785,6 +827,136 @@ $('#tpl-form').addEventListener('submit', async (ev) => {
   catch (e) { err.textContent = metaErrMsg(e); err.hidden = false; }
   finally { $('#tpl-save').disabled = false; }
 });
+
+// ============================================================ [T8] DISPARO ====
+const Bc = { account: null, templates: [], template: null, job: null, jobs: [], poll: null };
+App.bc = Bc;
+function parseCsvFront(text) {
+  const src = String(text || '').replace(/^﻿/, '');
+  const first = src.split(/\r?\n/, 1)[0] || '';
+  const sep = (first.match(/;/g) || []).length > (first.match(/,/g) || []).length ? ';' : ',';
+  const rows = []; let row = [], cell = '', inQ = false;
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (inQ) { if (ch === '"') { if (src[i + 1] === '"') { cell += '"'; i++; } else inQ = false; } else cell += ch; }
+    else if (ch === '"') inQ = true; else if (ch === sep) { row.push(cell); cell = ''; }
+    else if (ch === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; } else if (ch !== '\r') cell += ch;
+  }
+  if (cell.length || row.length) { row.push(cell); rows.push(row); }
+  return rows.map((r) => r.map((c) => c.trim())).filter((r) => r.some((c) => c !== ''));
+}
+function normalizePhoneFront(raw) { const d = String(raw || '').replace(/\D/g, ''); if (d.length < 10 || d.length > 15) return null; return d.length <= 11 ? '55' + d : d; }
+async function bcInit() {
+  if (!App.accounts.length) { try { App.accounts = await apiFetch('/api-oficial/accounts'); } catch (e) { toast(e.message, 'error'); } }
+  const sel = $('#bc-account');
+  sel.innerHTML = App.accounts.map((a) => `<option value="${a.id}">${esc(a.label)}</option>`).join('');
+  if (!Bc.account || !App.accounts.some((a) => a.id === Bc.account)) Bc.account = App.accounts[0]?.id || null;
+  sel.value = Bc.account || '';
+  await bcLoadTemplates();
+  bcPreview();
+  bcLoadJobs();
+}
+App.hooks.onTab.disparo = bcInit;
+async function bcLoadTemplates() {
+  Bc.templates = await App.templateOptions(Bc.account);
+  const sel = $('#bc-template');
+  sel.innerHTML = Bc.templates.length ? Bc.templates.map((t, i) => `<option value="${i}">${esc(t.name)} (${esc(t.language)})</option>`).join('') : '<option value="">Nenhum template - sincronize na aba Templates</option>';
+  bcTemplateChanged();
+}
+function bcTemplateChanged() {
+  Bc.template = Bc.templates[Number($('#bc-template').value)] || null;
+  const el = $('#bc-template-preview');
+  if (!Bc.template) { el.textContent = 'Escolha um template.'; return; }
+  const parts = [];
+  for (const c of Bc.template.components || []) {
+    if (c.type === 'HEADER') parts.push(c.format === 'TEXT' ? `[${c.text}]` : `[${c.format}]`);
+    if (c.type === 'BODY') parts.push(c.text);
+    if (c.type === 'FOOTER') parts.push(`_${c.text}_`);
+    if (c.type === 'BUTTONS') parts.push((c.buttons || []).map((b) => `( ${b.text} )`).join('  '));
+  }
+  const n = (parts.join('\n').match(/\{\{\d+\}\}/g) || []).length;
+  el.textContent = parts.join('\n') + (n ? `\n\nVariaveis: {{1}} = nome (2a coluna), {{2}} = 3a coluna, ...` : '');
+}
+$('#bc-account').addEventListener('change', (ev) => { Bc.account = ev.target.value; bcLoadTemplates(); });
+$('#bc-template').addEventListener('change', bcTemplateChanged);
+$('#bc-file').addEventListener('change', async (ev) => { const f = ev.target.files[0]; if (f) { $('#bc-csv').value = await f.text(); bcPreview(); } });
+$('#bc-csv').addEventListener('input', bcPreview);
+function bcPreview() {
+  const rows = parseCsvFront($('#bc-csv').value);
+  if (rows.length && /[a-zA-Z]/.test(String(rows[0][0] || ''))) rows.shift();
+  const seen = new Set(); let valid = 0, invalid = 0, dup = 0;
+  for (const r of rows) { const p = normalizePhoneFront(r[0]); if (!p) invalid++; else if (seen.has(p)) dup++; else { seen.add(p); valid++; } }
+  $('#bc-preview').textContent = rows.length ? `${valid} validos, ${invalid} invalidos (menos de 10 digitos), ${dup} duplicados.` : '';
+}
+$('#bc-send').addEventListener('click', async () => {
+  const csv = $('#bc-csv').value;
+  if (!Bc.template) return toast('Escolha um template (sincronize na aba Templates).', 'error');
+  if (!csv.trim()) return toast('Cole ou envie o CSV com os telefones.', 'error');
+  const btn = $('#bc-send'); btn.disabled = true;
+  try {
+    const r = await apiFetch('/api-oficial/broadcast', { method: 'POST', body: { account_id: Bc.account, list_name: $('#bc-list-name').value.trim(), template: { name: Bc.template.name, language: Bc.template.language }, csv, rate_per_sec: Number($('#bc-rate').value) } });
+    toast(`Disparo iniciado: ${r.total} contato(s)${r.invalid ? `, ${r.invalid} invalido(s) descartado(s)` : ''}`, 'ok');
+    Bc.job = { job_id: r.job_id, total: r.total, sent: 0, failed: 0, skipped: 0, percent: 0, done: false };
+    $('#bc-status').hidden = false; bcRenderJob(); bcStartPoll();
+  } catch (e) { toast(e.data?.detail || e.message, 'error'); }
+  finally { btn.disabled = false; }
+});
+function bcStartPoll() {
+  clearInterval(Bc.poll);
+  Bc.poll = setInterval(async () => {
+    if (!Bc.job) return clearInterval(Bc.poll);
+    try { Bc.job = await apiFetch(`/api-oficial/broadcast/${Bc.job.job_id}`); } catch (e) { clearInterval(Bc.poll); return toast(e.message, 'error'); }
+    bcRenderJob();
+    if (Bc.job.done) { clearInterval(Bc.poll); bcLoadJobs(); }
+  }, 700);
+}
+function bcRenderJob() {
+  const j = Bc.job; if (!j) return;
+  $('#bc-progress').style.width = (j.percent || 0) + '%';
+  $('#bc-summary').innerHTML = `${j.processed || 0}/${j.total} processados (${j.percent || 0}%) - <b>${j.sent} enviados</b> · <b class="${j.failed ? 'text-red-600' : ''}">${j.failed} falhas</b> · ${j.skipped} pulados (opt-out)` + (j.done ? ` · <span class="text-green-700">${j.cancelled ? 'cancelado' : 'concluido'}</span>` : '') + (j.errors?.length ? `<div class="text-xs text-red-600 mt-1">${j.errors.slice(-3).map((e) => `${esc(e.phone)}: ${esc(e.message)}`).join('<br>')}</div>` : '');
+  $('#bc-cancel').hidden = !!j.done;
+}
+$('#bc-cancel').addEventListener('click', async () => { if (Bc.job) { await apiFetch(`/api-oficial/broadcast/${Bc.job.job_id}/cancel`, { method: 'POST' }).catch(() => {}); } });
+$('#bc-open-report').addEventListener('click', () => { Rep.job = Bc.job?.job_id || ''; showView('apioficial', 'relatorio'); });
+async function bcLoadJobs() {
+  try { Bc.jobs = await apiFetch('/api-oficial/broadcast'); } catch { Bc.jobs = []; }
+  $('#bc-jobs').innerHTML = Bc.jobs.length ? Bc.jobs.slice(0, 8).map((j) => `<div class="flex justify-between gap-2"><span>${esc(j.list_name)} · ${esc(j.template.name)}</span><span>${j.sent}/${j.total} ok, ${j.failed} falhas${j.done ? '' : ' (rodando)'}</span></div>`).join('') : '-';
+}
+
+// ========================================================== [T8] RELATORIO ====
+const Rep = { job: '', account: '', status: '' };
+App.rep = Rep;
+async function repInit() {
+  try { Bc.jobs = await apiFetch('/api-oficial/broadcast'); } catch { Bc.jobs = []; }
+  if (!App.accounts.length) { try { App.accounts = await apiFetch('/api-oficial/accounts'); } catch {} }
+  $('#rep-job').innerHTML = '<option value="">Todos</option>' + Bc.jobs.map((j) => `<option value="${j.job_id}">${esc(j.list_name)} · ${esc(j.template.name)} (${j.sent}/${j.total})</option>`).join('');
+  $('#rep-job').value = Rep.job || '';
+  $('#rep-account').innerHTML = '<option value="">Todas</option>' + App.accounts.map((a) => `<option value="${a.id}">${esc(a.label)}</option>`).join('');
+  $('#rep-account').value = Rep.account || '';
+  $('#rep-status').value = Rep.status || '';
+  await repLoad();
+}
+App.hooks.onTab.relatorio = repInit;
+async function repLoad() {
+  const qs = new URLSearchParams({ limit: 500 });
+  if (Rep.job) qs.set('job_id', Rep.job); if (Rep.account) qs.set('account_id', Rep.account); if (Rep.status) qs.set('status', Rep.status);
+  let r; try { r = await apiFetch('/api-oficial/sends-report?' + qs); } catch (e) { return toast(e.message, 'error'); }
+  const s = r.summary;
+  $('#rep-summary').textContent = `${s.total} registros · ${s.sent} enviados · ${s.failed} falhas · ${s.skipped} pulados · ${s.delivered} entregues · ${s.read} lidos`;
+  const tb = $('#rep-rows');
+  if (!r.rows.length) { tb.innerHTML = '<tr><td colspan="7" class="px-3 py-6 text-center text-slate-400">Sem dados.</td></tr>'; return; }
+  tb.innerHTML = r.rows.map((x) => `<tr class="border-t align-top">
+    <td class="px-3 py-2 whitespace-nowrap text-xs">${fmtTime(x.created_at)}</td><td class="px-3 py-2 font-mono text-xs">${esc(x.phone)}</td><td class="px-3 py-2">${esc(x.name || '')}</td>
+    <td class="px-3 py-2 text-xs">${esc(x.list_name || '')}<br><span class="text-slate-400">${esc(x.template_name || '')}</span></td>
+    <td class="px-3 py-2">${badge(true, esc(x.status === 'sent' ? 'enviado' : x.status === 'failed' ? 'falhou' : x.status === 'skipped' ? 'pulado' : x.status), x.status === 'sent' ? 'bg-green-100 text-green-800' : x.status === 'failed' ? 'bg-red-100 text-red-800' : 'bg-slate-100 text-slate-600')}${x.skip_reason ? `<div class="text-[10px] text-slate-400">${esc(x.skip_reason)}</div>` : ''}</td>
+    <td class="px-3 py-2 text-xs">${esc(x.delivery_status || '-')}</td>
+    <td class="px-3 py-2 text-xs max-w-md">${x.help ? `<b>${x.help.code}</b> ${esc(x.help.motivo)}<div class="text-slate-500">&#10140; ${esc(x.help.fix)}</div>` : (x.error_message ? esc(x.error_message) : '')}</td>
+  </tr>`).join('');
+}
+$('#rep-job').addEventListener('change', (ev) => { Rep.job = ev.target.value; repLoad(); });
+$('#rep-account').addEventListener('change', (ev) => { Rep.account = ev.target.value; repLoad(); });
+$('#rep-status').addEventListener('change', (ev) => { Rep.status = ev.target.value; repLoad(); });
+$('#rep-refresh').addEventListener('click', repLoad);
 
 // ---- boot ----
 (async () => {

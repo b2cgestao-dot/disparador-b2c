@@ -152,7 +152,7 @@ Aceitacao:
 
 ---
 
-## [~] T8 - Disparo / Broadcast
+## [x] T8 - Disparo / Broadcast
 
 Entrega: job em memoria (`broadcastJobs` Map), `POST /api-oficial/broadcast` ->
 `{job_id,total}` na hora e `runBroadcast()` nao-awaited; polling em
@@ -161,20 +161,20 @@ Entrega: job em memoria (`broadcastJobs` Map), `POST /api-oficial/broadcast` ->
 pula opt-out; variaveis do template por linha.
 
 Aceitacao:
-- [ ] `POST /broadcast` responde na hora com `{job_id,total}` e o job roda em
+- [x] `POST /broadcast` responde na hora com `{job_id,total}` e o job roda em
       segundo plano.
-- [ ] O polling retorna `{total,sent,failed,skipped,processed,percent,done}` e o
+- [x] O polling retorna `{total,sent,failed,skipped,processed,percent,done}` e o
       `percent` avanca ao longo do tempo.
-- [ ] Contato com `opt_out=true` e contado em `skipped`, nao enviado.
-- [ ] CSV com virgula dentro de aspas e parseado sem embaralhar colunas.
-- [ ] Telefone com menos de 10 digitos (ex.: "16") e descartado.
-- [ ] `sends-report` retorna `help:{code,motivo,fix}` em PT pros codigos de erro
+- [x] Contato com `opt_out=true` e contado em `skipped`, nao enviado.
+- [x] CSV com virgula dentro de aspas e parseado sem embaralhar colunas.
+- [x] Telefone com menos de 10 digitos (ex.: "16") e descartado.
+- [x] `sends-report` retorna `help:{code,motivo,fix}` em PT pros codigos de erro
       simulados pelo mock.
-- [ ] Nao existe rota duplicada (`/sends` vs `/sends-report`); o processo sobe.
+- [x] Nao existe rota duplicada (`/sends` vs `/sends-report`); o processo sobe.
 
 ---
 
-## [ ] T9 - Fluxos (chatbot por botao) - opcional mas incluido
+## [~] T9 - Fluxos (chatbot por botao) - opcional mas incluido
 
 Entrega: `wa_flows` + motor no backend (`waRunFlow`, `waSendFlowStep`,
 `waSendAndRecord`, `waApplyActions`). Botao QUICK_REPLY do template dispara o

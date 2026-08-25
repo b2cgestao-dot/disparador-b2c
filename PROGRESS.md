@@ -11,8 +11,8 @@ STATUS: TODO | IN_PROGRESS | DONE | BLOCKED
 
 ## Estado atual
 
-- Tarefa em foco: T8 (disparo / broadcast)
-- Ultima stack verde: 2026-08-25 18:05 (`./verify.sh t7` = 0)
+- Tarefa em foco: T9 (fluxos por botao)
+- Ultima stack verde: 2026-08-25 18:35 (`./verify.sh t8` = 0)
 
 ## Log
 
@@ -24,8 +24,8 @@ STATUS: TODO | IN_PROGRESS | DONE | BLOCKED
 - T5  | DONE | 2026-08-25 17:15 | GET /whatsapp/webhook (verify_token de qualquer conta -> ecoa challenge); POST valida X-Hub-Signature-256 sobre rawBody (timingSafeEqual), acha conta por phone_number_id, grava wa_webhook_events (mesmo invalido), upsert contato, abre/reabre conversa (+unread, janela +24h), insere wa_messages (dedup por wamid), baixa midia da Meta pro bucket wa-media (URL publica via SUPABASE_PUBLIC_URL), status delivered/read/failed atualiza wa_messages e whatsapp_api_sends (nao rebaixa status). Gancho waOnInbound pros fluxos (T9). 9 testes verdes.
 - T6  | DONE | 2026-08-25 17:50 | /api-oficial/conversations (lista c/ contato+conta, filtros status/assigned/account/search), /:id, /:id/messages, /:id/notes (GET/POST), /:id/(assign|release|read|status|send), PATCH /contacts/:id. waSendAndRecord() compartilhado (texto/template, grava sucesso ou falha em wa_messages, atualiza conversa/contato). Texto fora da janela -> 409 JANELA_FECHADA; template sempre pode. Front: inbox 3 colunas (lista com filtros, thread com bolhas in/out/fluxo/midia/status, composer que troca pra template quando a janela fecha, lateral com contato/tags/opt-out/notas), Realtime em wa_messages e wa_conversations. 14 testes verdes (9 API incl. Realtime em Node + 5 no Chrome).
 - T7  | DONE | 2026-08-25 18:05 | GET /accounts/:id/templates (ao vivo, paginado), POST /sync-templates (upsert em wa_templates por account+name+language, remove os que sumiram), GET /templates-cache, POST /templates (valida nome/idioma/categoria/BODY; header_media base64 -> Storage wa-media/templates/... -> upload resumable na Meta (POST /{app_id}/uploads + POST /{upload_id} com Authorization: OAuth) -> header_handle no HEADER -> POST message_templates -> cache). Front: aba Templates (select de conta, Sincronizar, tabela com resumo, dialog de novo template com cabecalho texto/midia, corpo, rodape, ate 3 quick replies + URL). App.templateOptions(accountId) alimenta o composer do inbox (e o disparo na T8). 9 testes verdes.
-- T8  | IN_PROGRESS | 2026-08-25 18:06 | Disparo: broadcastJobs em memoria, CSV, opt-out, sends-report com WA_ERROR_HELP.
-- T9  | TODO | -            | -
+- T8  | DONE | 2026-08-25 18:35 | POST /broadcast -> 202 {job_id,total,invalid,duplicates} na hora; runBroadcast() nao-awaited (rate 1-50 msg/s); GET /broadcast(/:jobId), POST /:jobId/cancel; GET /sends-report {summary, rows[].help{code,motivo,fix}} com WA_ERROR_HELP (~55 codigos em PT). CSV: aspas, "" escapado, CRLF, BOM, separador , ou ;, cabecalho = 1a linha com letras. Telefone <10 digitos descartado, 10-11 digitos ganha 55, dedup. Nome da lista vira tag no contato; opt_out pulado (skipped + skip_reason); variaveis {{n}} do BODY (e HEADER texto) vem das colunas apos o telefone. Cada envio vira wa_messages out (template_name) + whatsapp_api_sends. Front: aba Disparo (previa validos/invalidos/duplicados, template do cache, progresso por polling, cancelar) e aba Relatorio (filtros, motivo + fix em PT). 11 testes verdes.
+- T9  | IN_PROGRESS | 2026-08-25 18:36 | Fluxos: motor waRunFlow/waSendFlowStep/waApplyActions, gatilho por botao QUICK_REPLY, delay, acoes, janela.
 - T10 | BLOCKED | -         | Deploy real aguarda VPS + dominio + DNS do dono.
 - T11 | TODO | -            | -
 
@@ -38,6 +38,13 @@ STATUS: TODO | IN_PROGRESS | DONE | BLOCKED
   dono colocar o blueprint na pasta, reconciliar nomes de colunas/telas com ele.
 
 ## Notas de tentativas (bugs encontrados e como resolvi)
+
+- T8 | Deteccao de cabecalho do CSV por "poucos digitos no 1o campo" engolia a
+  linha `16,Lixo` (que deveria contar como invalida). Regra final: 1a linha e
+  cabecalho se o 1o campo tem letras.
+- T8 | Teste com telefone fixo (5511987654321) acumulava envios no mock entre
+  execucoes. Asserts de contagem no mock devem usar telefones aleatorios ou
+  checar por job_id no banco.
 
 - T6 | `node --test` ficou pendurado (>400s): o cliente Realtime do supabase-js
   mantem o event loop vivo. Solucao: no teste, `removeChannel` +

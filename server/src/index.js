@@ -236,6 +236,200 @@ async function getConversation(id) {
   return data;
 }
 
+// ------------------------------------------------------------ [9a] disparo: utilitarios
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Erros da Meta traduzidos pro PT (motivo + o que fazer). Fonte: codigos da Cloud API.
+const WA_ERROR_HELP = {
+  0: { motivo: 'Falha de autenticacao (token invalido ou sem permissao).', fix: 'Gere um novo token de sistema com as permissoes whatsapp_business_messaging e whatsapp_business_management e atualize a conta.' },
+  1: { motivo: 'Erro interno da Meta.', fix: 'Tente de novo em alguns minutos. Se persistir, verifique o status da plataforma.' },
+  2: { motivo: 'Servico da Meta temporariamente indisponivel.', fix: 'Aguarde e reenvie. Reduza a velocidade do disparo.' },
+  3: { motivo: 'Sem permissao pra essa operacao.', fix: 'Confira as permissoes do token e se o app tem acesso a WABA.' },
+  4: { motivo: 'Limite de chamadas do app atingido.', fix: 'Reduza a velocidade do disparo e tente mais tarde.' },
+  10: { motivo: 'Permissao negada pra essa acao.', fix: 'O app precisa da permissao correspondente e a conta precisa estar verificada.' },
+  33: { motivo: 'Objeto nao existe ou sem permissao (phone_number_id/waba_id errados?).', fix: 'Confira o Phone Number ID e o WABA ID cadastrados na conta.' },
+  100: { motivo: 'Parametro invalido na requisicao.', fix: 'Confira o numero de destino, o nome/idioma do template e as variaveis.' },
+  190: { motivo: 'Token de acesso expirado ou invalido.', fix: 'Gere um token de sistema com expiracao "Nunca" e atualize na tela de Contas.' },
+  200: { motivo: 'Permissao insuficiente pra enviar mensagens.', fix: 'Adicione whatsapp_business_messaging ao token.' },
+  368: { motivo: 'Conta temporariamente bloqueada por violacao de politicas.', fix: 'Verifique as notificacoes no Gerenciador de Negocios e recorra se necessario.' },
+  80007: { motivo: 'Limite de taxa da WABA atingido.', fix: 'Reduza a velocidade do disparo e aguarde.' },
+  130429: { motivo: 'Limite de envio por segundo atingido (rate limit).', fix: 'Diminua a velocidade do disparo (mensagens por segundo) e reenvie os que falharam.' },
+  130472: { motivo: 'Numero do destinatario esta em um experimento da Meta (nao recebe marketing).', fix: 'Nada a fazer; tente mais tarde ou com template utilitario.' },
+  131000: { motivo: 'Erro desconhecido ao enviar.', fix: 'Tente reenviar. Se persistir, verifique o status da plataforma.' },
+  131005: { motivo: 'Acesso negado (permissao de mensagens).', fix: 'Confira as permissoes do token e a verificacao do negocio.' },
+  131008: { motivo: 'Faltou um parametro obrigatorio.', fix: 'Confira o payload: destinatario, tipo e conteudo.' },
+  131009: { motivo: 'Valor de parametro invalido.', fix: 'Confira o formato do telefone (DDI+DDD+numero, so digitos) e as variaveis.' },
+  131016: { motivo: 'Servico indisponivel.', fix: 'Aguarde e tente de novo.' },
+  131021: { motivo: 'Remetente e destinatario sao o mesmo numero.', fix: 'Remova o proprio numero da lista.' },
+  131026: { motivo: 'Mensagem nao entregue: numero sem WhatsApp, bloqueou voce ou nao aceitou os termos novos.', fix: 'Confirme que o numero tem WhatsApp ativo. Nao insista em numeros que bloquearam.' },
+  131030: { motivo: 'Destinatario nao esta na lista de numeros permitidos (modo de teste).', fix: 'Adicione o numero na lista de teste ou saia do modo de teste (verificacao do negocio + politica de privacidade).' },
+  131031: { motivo: 'Conta bloqueada por violacao de politica ou falta de pagamento.', fix: 'Verifique o Gerenciador de Negocios (pagamento/politicas).' },
+  131037: { motivo: 'Nome de exibicao do numero pendente de aprovacao.', fix: 'Aguarde a aprovacao do nome no painel da Meta.' },
+  131042: { motivo: 'Problema de pagamento na conta.', fix: 'Cadastre/atualize o metodo de pagamento no Gerenciador de Negocios.' },
+  131045: { motivo: 'Numero nao registrado ou certificado invalido.', fix: 'Clique em Registrar (PIN) na tela de Contas.' },
+  131047: { motivo: 'Fora da janela de 24h: o cliente nao respondeu nas ultimas 24h e a mensagem nao era template.', fix: 'Envie um template aprovado (marketing/utilidade). Texto livre so dentro da janela de 24h.' },
+  131048: { motivo: 'Envio bloqueado: limite de spam atingido (qualidade baixa).', fix: 'Pare o disparo, melhore a qualidade (menos reclamacoes/bloqueios) e aguarde.' },
+  131049: { motivo: 'A Meta nao entregou pra manter a saude do ecossistema (o destinatario recebe muito marketing).', fix: 'Nada a fazer agora; tente de novo depois. Prefira templates utilitarios.' },
+  131050: { motivo: 'O usuario parou de receber mensagens de marketing deste numero.', fix: 'Marque o contato como opt-out. Nao envie mais marketing pra ele.' },
+  131051: { motivo: 'Tipo de mensagem nao suportado.', fix: 'Use texto, template, imagem, documento, audio ou video suportados.' },
+  131052: { motivo: 'Falha ao baixar a midia do destinatario.', fix: 'Peca pro cliente reenviar o arquivo.' },
+  131053: { motivo: 'Falha ao enviar a midia (formato/tamanho).', fix: 'Confira o tipo e tamanho do arquivo (imagem ate 5 MB, documento ate 100 MB).' },
+  131056: { motivo: 'Muitas mensagens pro mesmo destinatario em pouco tempo.', fix: 'Espere alguns minutos antes de enviar de novo pra esse numero.' },
+  131057: { motivo: 'Conta em modo de manutencao.', fix: 'Aguarde a conclusao da manutencao.' },
+  132000: { motivo: 'Numero de variaveis nao bate com o template (faltou ou sobrou parametro).', fix: 'Confira quantas variaveis {{n}} o template tem e envie exatamente essa quantidade de colunas no CSV.' },
+  132001: { motivo: 'Template nao existe (nome/idioma errados) ou nao esta aprovado.', fix: 'Sincronize os templates e escolha um template APROVADO no idioma certo.' },
+  132005: { motivo: 'Texto traduzido do template muito longo.', fix: 'Reduza o texto das variaveis.' },
+  132007: { motivo: 'Conteudo do template viola politicas.', fix: 'Revise o texto do template e crie uma nova versao.' },
+  132012: { motivo: 'Formato de parametro invalido pro template.', fix: 'Variaveis nao podem ter quebras de linha, tabs ou mais de 4 espacos seguidos.' },
+  132015: { motivo: 'Template pausado por baixa qualidade.', fix: 'Use outro template ou aguarde a reativacao.' },
+  132016: { motivo: 'Template desativado por baixa qualidade.', fix: 'Crie um novo template com conteudo diferente.' },
+  132068: { motivo: 'Fluxo (Flow) bloqueado.', fix: 'Revise o Flow no painel da Meta.' },
+  133000: { motivo: 'Falha ao apagar o registro do numero.', fix: 'Tente de novo mais tarde.' },
+  133004: { motivo: 'Servidor temporariamente indisponivel.', fix: 'Aguarde e tente de novo.' },
+  133005: { motivo: 'PIN de verificacao em duas etapas incorreto.', fix: 'Confira o PIN de 6 digitos do numero e registre de novo.' },
+  133006: { motivo: 'Numero precisa ser verificado de novo.', fix: 'Refaca a verificacao do numero no painel da Meta.' },
+  133008: { motivo: 'Muitas tentativas de PIN.', fix: 'Aguarde antes de tentar registrar de novo.' },
+  133009: { motivo: 'Tentou o PIN rapido demais.', fix: 'Aguarde alguns minutos.' },
+  133010: { motivo: 'Numero nao registrado na Cloud API.', fix: 'Na tela de Contas, clique em Registrar e informe o PIN de 6 digitos.' },
+  133015: { motivo: 'Numero registrado recentemente; aguarde.', fix: 'Tente de novo em alguns minutos.' },
+  135000: { motivo: 'Erro generico de usuario.', fix: 'Confira o payload; se persistir, contate o suporte da Meta.' },
+};
+function errorHelp(code) {
+  if (code === null || code === undefined) return null;
+  const h = WA_ERROR_HELP[Number(code)];
+  return h ? { code: Number(code), ...h } : { code: Number(code), motivo: 'Erro nao catalogado.', fix: 'Consulte a documentacao de erros da Cloud API pelo codigo.' };
+}
+
+// CSV: respeita aspas (virgula dentro), aspas escapadas (""), CRLF, BOM, separador , ou ;  (anti-bug #6)
+function parseCsv(text) {
+  const src = String(text || '').replace(/^﻿/, '');
+  const firstLine = src.split(/\r?\n/, 1)[0] || '';
+  const sep = (firstLine.match(/;/g) || []).length > (firstLine.match(/,/g) || []).length ? ';' : ',';
+  const rows = []; let row = [], cell = '', inQ = false;
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (inQ) {
+      if (ch === '"') { if (src[i + 1] === '"') { cell += '"'; i++; } else inQ = false; }
+      else cell += ch;
+    } else if (ch === '"') inQ = true;
+    else if (ch === sep) { row.push(cell); cell = ''; }
+    else if (ch === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; }
+    else if (ch === '\r') { /* ignora */ }
+    else cell += ch;
+  }
+  if (cell.length || row.length) { row.push(cell); rows.push(row); }
+  return rows.map((r) => r.map((c) => c.trim())).filter((r) => r.some((c) => c !== ''));
+}
+// Telefone: so digitos; < 10 digitos descarta; 10-11 digitos (BR sem DDI) ganha 55.
+function normalizePhone(raw) {
+  const d = onlyDigits(raw);
+  if (d.length < 10 || d.length > 15) return null;
+  if (d.length === 10 || d.length === 11) return '55' + d;
+  return d;
+}
+function csvToContacts(csv) {
+  const rows = parseCsv(csv);
+  if (!rows.length) return [];
+  if (rows[0] && /[a-zA-Z]/.test(String(rows[0][0] || ''))) rows.shift(); // 1a linha com letras = cabecalho
+  return rows.map((r) => ({ phone: r[0], name: r[1] || '', vars: r.slice(1) }));
+}
+function normalizeContacts(list) {
+  const seen = new Set(); const contacts = []; let invalid = 0, duplicates = 0;
+  for (const c of list) {
+    const phone = normalizePhone(c.phone);
+    if (!phone) { invalid++; continue; }
+    if (seen.has(phone)) { duplicates++; continue; }
+    seen.add(phone);
+    const vars = Array.isArray(c.vars) ? c.vars.map((v) => String(v ?? '')) : (c.name ? [String(c.name)] : []);
+    contacts.push({ phone, name: String(c.name || '').trim(), vars });
+  }
+  return { contacts, invalid, duplicates };
+}
+// Monta os components do template a partir das variaveis da linha ({{1}} = var 1, ...)
+function buildTemplateComponents(cachedComponents, vars) {
+  if (!Array.isArray(cachedComponents)) return [];
+  const out = [];
+  const count = (t) => (String(t || '').match(/\{\{\d+\}\}/g) || []).length;
+  const header = cachedComponents.find((c) => c.type === 'HEADER');
+  if (header && header.format === 'TEXT' && count(header.text) > 0) {
+    out.push({ type: 'header', parameters: [{ type: 'text', text: String(vars[0] ?? '') }] });
+  }
+  const body = cachedComponents.find((c) => c.type === 'BODY');
+  const n = body ? count(body.text) : 0;
+  if (n > 0) out.push({ type: 'body', parameters: Array.from({ length: n }, (_, i) => ({ type: 'text', text: String(vars[i] ?? '') })) });
+  return out;
+}
+
+// ------------------------------------------------------------ [9b] disparo: jobs em memoria (anti-bug #5)
+const broadcastJobs = new Map();
+function jobPublic(j) {
+  const processed = j.sent + j.failed + j.skipped;
+  return {
+    job_id: j.id, account_id: j.account_id, account_label: j.account.label, list_name: j.list_name, template: j.template,
+    total: j.total, sent: j.sent, failed: j.failed, skipped: j.skipped, processed,
+    percent: j.total ? Math.round((processed / j.total) * 100) : 100,
+    done: j.done, cancelled: j.cancelled, started_at: j.started_at, finished_at: j.finished_at,
+    created_by: j.created_by, rate_per_sec: j.rate, errors: j.errors.slice(-50), error: j.error || null,
+  };
+}
+async function upsertBroadcastContact(account, c, listName) {
+  const { data: existing } = await sb.from('wa_contacts').select('*').eq('account_id', account.id).eq('phone', c.phone).maybeSingle();
+  if (existing) {
+    const patch = {};
+    if (c.name && !existing.name) patch.name = c.name;
+    if (listName && !(existing.tags || []).includes(listName)) patch.tags = [...(existing.tags || []), listName];
+    if (!Object.keys(patch).length) return existing;
+    const { data } = await sb.from('wa_contacts').update(patch).eq('id', existing.id).select('*').single();
+    return data || existing;
+  }
+  const { data, error } = await sb.from('wa_contacts').insert({ account_id: account.id, phone: c.phone, name: c.name || null, tags: listName ? [listName] : [] }).select('*').single();
+  if (error) { if (error.code === '23505') return upsertBroadcastContact(account, c, listName); throw error; }
+  return data;
+}
+async function recordSend(job, c, extra) {
+  const { error } = await sb.from('whatsapp_api_sends').insert({
+    account_id: job.account_id, job_id: job.id, list_name: job.list_name, phone: c.phone, name: c.name || null,
+    template_name: job.template.name, template_language: job.template.language, variables: c.vars,
+    sent_by: job.created_by_user?.id || null, sent_by_email: job.created_by || null, ...extra,
+  });
+  if (error) app.log.error({ err: error }, 'falha ao gravar whatsapp_api_sends');
+}
+async function runBroadcast(job) {
+  const account = job.account;
+  const delay = Math.max(20, Math.round(1000 / job.rate));
+  for (const c of job.contacts) {
+    if (job.cancelled) break;
+    const t0 = Date.now();
+    try {
+      const contact = await upsertBroadcastContact(account, c, job.list_name);
+      if (contact.opt_out) { // anti-bug #7
+        job.skipped++;
+        await recordSend(job, c, { status: 'skipped', skip_reason: 'opt_out' });
+        continue;
+      }
+      const conv = await ensureConversation(account, contact);
+      const components = buildTemplateComponents(job.tplComponents, c.vars);
+      const r = await waSendAndRecord({
+        account, conversation: conv, contact, kind: 'template', sentBy: job.created_by_user,
+        template: { name: job.template.name, language: job.template.language, components, preview: `[disparo ${job.list_name}: ${job.template.name}]` },
+      });
+      if (r.ok) { job.sent++; await recordSend(job, c, { status: 'sent', wamid: r.wamid, delivery_status: 'accepted' }); }
+      else {
+        job.failed++;
+        job.errors.push({ phone: c.phone, code: r.error.code, message: r.error.message });
+        await recordSend(job, c, { status: 'failed', error_code: r.error.code, error_message: r.error.message, error: r.error.meta || null });
+      }
+    } catch (e) {
+      job.failed++;
+      job.errors.push({ phone: c.phone, code: null, message: String(e.message) });
+      await recordSend(job, c, { status: 'failed', error_message: String(e.message) }).catch(() => {});
+    }
+    const wait = delay - (Date.now() - t0);
+    if (wait > 0) await sleep(wait);
+  }
+  job.done = true; job.finished_at = nowIso();
+  app.log.info({ job: job.id, sent: job.sent, failed: job.failed, skipped: job.skipped }, 'disparo concluido');
+}
+
 app.register(async function apiOficial(api) {
   api.addHook('preHandler', requireAuth);
 
@@ -562,6 +756,69 @@ app.register(async function apiOficial(api) {
       if (error) app.log.error({ err: error }, 'falha ao cachear template');
       return reply.code(201).send({ id: created?.id || null, status: row.status, category: row.category, header_handle: headerHandle, ...(media || {}), template: row });
     });
+  });
+
+  // ---- [9] disparo / broadcast ----
+  api.post('/broadcast', async (req, reply) => {
+    const b = req.body || {};
+    if (!isUuid(b.account_id)) return httpError(reply, 400, 'ACCOUNT_ID_OBRIGATORIO');
+    const account = await getAccount(b.account_id);
+    if (!account) return httpError(reply, 404, 'CONTA_NAO_ENCONTRADA');
+    const tplName = String(b.template?.name || '').trim();
+    if (!tplName) return httpError(reply, 400, 'TEMPLATE_OBRIGATORIO');
+    const tplLang = String(b.template?.language || 'pt_BR').trim();
+    const list_name = String(b.list_name || '').trim() || `Disparo ${new Date().toLocaleDateString('pt-BR')}`;
+    let raw = [];
+    if (typeof b.csv === 'string' && b.csv.trim()) raw = csvToContacts(b.csv);
+    else if (Array.isArray(b.contacts)) raw = b.contacts;
+    const { contacts, invalid, duplicates } = normalizeContacts(raw);
+    if (!contacts.length) return httpError(reply, 400, 'LISTA_VAZIA', { invalid, duplicates, detail: 'Nenhum telefone valido (minimo 10 digitos).' });
+    const rate = Math.min(50, Math.max(1, Number(b.rate_per_sec) || 5));
+    const { data: tplRow } = await sb.from('wa_templates').select('components').eq('account_id', account.id).eq('name', tplName).eq('language', tplLang).maybeSingle();
+    const job = {
+      id: `job-${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`,
+      account, account_id: account.id, list_name, template: { name: tplName, language: tplLang }, tplComponents: tplRow?.components || null,
+      contacts, total: contacts.length, sent: 0, failed: 0, skipped: 0, done: false, cancelled: false, errors: [],
+      started_at: nowIso(), finished_at: null, rate, created_by: req.user.email, created_by_user: req.user,
+    };
+    broadcastJobs.set(job.id, job);
+    if (broadcastJobs.size > 100) { // poda os mais antigos ja concluidos
+      for (const [id, j] of broadcastJobs) { if (j.done) { broadcastJobs.delete(id); if (broadcastJobs.size <= 100) break; } }
+    }
+    runBroadcast(job).catch((e) => { job.done = true; job.finished_at = nowIso(); job.error = String(e.message); app.log.error({ err: e }, 'runBroadcast'); }); // nao-awaited
+    return reply.code(202).send({ job_id: job.id, total: job.total, invalid, duplicates, list_name, template: job.template, rate_per_sec: rate });
+  });
+  api.get('/broadcast', async () => [...broadcastJobs.values()].map(jobPublic).sort((a, b) => (a.started_at < b.started_at ? 1 : -1)));
+  api.get('/broadcast/:jobId', async (req, reply) => {
+    const job = broadcastJobs.get(req.params.jobId);
+    if (!job) return httpError(reply, 404, 'JOB_NAO_ENCONTRADO');
+    return jobPublic(job);
+  });
+  api.post('/broadcast/:jobId/cancel', async (req, reply) => {
+    const job = broadcastJobs.get(req.params.jobId);
+    if (!job) return httpError(reply, 404, 'JOB_NAO_ENCONTRADO');
+    job.cancelled = true;
+    return jobPublic(job);
+  });
+
+  // Relatorio de envios com erros traduzidos (anti-bug #4: nao existe /sends, so /sends-report)
+  api.get('/sends-report', async (req, reply) => {
+    const { job_id, account_id, status, since, limit } = req.query;
+    let q = sb.from('whatsapp_api_sends').select('*').order('created_at', { ascending: false }).limit(Math.min(Number(limit) || 500, 5000));
+    if (job_id) q = q.eq('job_id', String(job_id));
+    if (account_id && isUuid(account_id)) q = q.eq('account_id', account_id);
+    if (status) q = q.eq('status', String(status));
+    if (since) q = q.gte('created_at', String(since));
+    const { data, error } = await q;
+    if (error) return dbFail(reply, error, 'sends-report');
+    const rows = data.map((r) => ({ ...r, help: r.status === 'failed' ? errorHelp(r.error_code) : null }));
+    const summary = { total: rows.length, sent: 0, failed: 0, skipped: 0, delivered: 0, read: 0 };
+    for (const r of rows) {
+      if (r.status in summary) summary[r.status]++;
+      if (r.delivery_status === 'delivered') summary.delivered++;
+      if (r.delivery_status === 'read') { summary.delivered++; summary.read++; }
+    }
+    return { summary, rows };
   });
 
   // >>> [api-oficial] proximas rotas (inbox, templates, disparo, fluxos) entram aqui
