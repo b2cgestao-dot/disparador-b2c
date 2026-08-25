@@ -121,7 +121,7 @@ const mimeDefault = { image: 'image/png', audio: 'audio/ogg', video: 'video/mp4'
 
 function requireAuth(req, reply) {
   const h = req.headers.authorization || '';
-  if (!h.startsWith('Bearer ') || h.length < 10) {
+  if (!/^(Bearer|OAuth) .{3,}/.test(h)) {
     metaError(reply, { code: 190, message: 'Invalid OAuth access token - Cannot parse access token', details: 'missing Authorization: Bearer' }, 401);
     return false;
   }

@@ -134,7 +134,7 @@ Aceitacao:
 
 ---
 
-## [~] T7 - Templates
+## [x] T7 - Templates
 
 Entrega: listar/sincronizar templates da Meta (mock) e criar novos, com cache em
 `wa_templates`. Cabecalho de midia via upload (mock retorna `header_handle`).
@@ -144,15 +144,15 @@ Endpoints: `GET/POST /api-oficial/accounts/:id/templates`,
 `POST /api-oficial/accounts/:id/sync-templates`.
 
 Aceitacao:
-- [ ] "Sincronizar" busca do mock e popula `wa_templates`.
-- [ ] "Criar template" faz POST no mock e retorna id.
-- [ ] Criar com cabecalho de midia sobe pro Storage, o backend reenvia pro mock
+- [x] "Sincronizar" busca do mock e popula `wa_templates`.
+- [x] "Criar template" faz POST no mock e retorna id.
+- [x] Criar com cabecalho de midia sobe pro Storage, o backend reenvia pro mock
       e recebe um `header_handle`.
-- [ ] O cache alimenta o seletor de template no disparo.
+- [x] O cache alimenta o seletor de template no disparo.
 
 ---
 
-## [ ] T8 - Disparo / Broadcast
+## [~] T8 - Disparo / Broadcast
 
 Entrega: job em memoria (`broadcastJobs` Map), `POST /api-oficial/broadcast` ->
 `{job_id,total}` na hora e `runBroadcast()` nao-awaited; polling em

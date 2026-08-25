@@ -456,6 +456,114 @@ app.register(async function apiOficial(api) {
     return data;
   });
 
+  // ---- [8] templates ----
+  const TEMPLATE_CATEGORIES = ['MARKETING', 'UTILITY', 'AUTHENTICATION'];
+  async function accountWithWaba(req, reply) {
+    const acc = await getAccount(req.params.id);
+    if (!acc) { httpError(reply, 404, 'CONTA_NAO_ENCONTRADA'); return null; }
+    if (!acc.waba_id) { httpError(reply, 400, 'WABA_ID_OBRIGATORIO'); return null; }
+    return acc;
+  }
+  async function fetchMetaTemplates(acc) {
+    const out = []; let after;
+    for (let i = 0; i < 20; i++) {
+      const res = await metaFetch(acc, `${acc.waba_id}/message_templates`, { query: { fields: 'id,name,status,category,language,components', limit: 100, after } });
+      out.push(...(res.data || []));
+      after = res.paging?.cursors?.after;
+      if (!res.paging?.next || !after) break;
+    }
+    return out;
+  }
+  async function syncTemplates(acc) {
+    const list = await fetchMetaTemplates(acc);
+    const rows = list.filter((t) => t.name && t.language).map((t) => ({
+      account_id: acc.id, meta_id: t.id || null, name: t.name, language: t.language, category: t.category || null,
+      status: t.status || null, components: t.components || [], synced_at: nowIso(),
+    }));
+    if (rows.length) {
+      const { error } = await sb.from('wa_templates').upsert(rows, { onConflict: 'account_id,name,language' });
+      if (error) throw error;
+    }
+    const keys = new Set(rows.map((r) => r.name + '|' + r.language));
+    const { data: cached } = await sb.from('wa_templates').select('id,name,language').eq('account_id', acc.id);
+    const stale = (cached || []).filter((c) => !keys.has(c.name + '|' + c.language)).map((c) => c.id);
+    if (stale.length) await sb.from('wa_templates').delete().in('id', stale);
+    return rows;
+  }
+  // Upload resumable da Meta: POST /{app_id}/uploads -> id; POST /{id} (Authorization: OAuth) -> { h }
+  async function metaUploadMedia(acc, buf, mime, filename) {
+    let appId = acc.app_id;
+    if (!appId) {
+      const dbg = await metaFetch(acc, 'debug_token', { query: { input_token: acc.access_token } });
+      appId = dbg?.data?.app_id;
+      if (appId) await updateAccount(acc.id, { app_id: appId }).catch(() => {});
+    }
+    if (!appId) { const e = new Error('APP_ID_OBRIGATORIO'); e.code = 'APP_ID_OBRIGATORIO'; throw e; }
+    const session = await metaFetch(acc, `${appId}/uploads`, { method: 'POST', query: { file_length: buf.length, file_type: mime, file_name: filename || 'media' } });
+    if (!session?.id) throw new Error('Meta nao retornou id da sessao de upload');
+    const res = await metaFetch(acc, session.id, { method: 'POST', body: buf, headers: { Authorization: `OAuth ${acc.access_token}`, file_offset: '0', 'Content-Type': 'application/octet-stream' } });
+    if (!res?.h) throw new Error('Meta nao retornou header_handle');
+    return res.h;
+  }
+
+  api.get('/accounts/:id/templates', async (req, reply) => {
+    const acc = await accountWithWaba(req, reply); if (!acc) return;
+    return withMeta(reply, async () => ({ data: await fetchMetaTemplates(acc) }));
+  });
+  api.post('/accounts/:id/sync-templates', async (req, reply) => {
+    const acc = await accountWithWaba(req, reply); if (!acc) return;
+    return withMeta(reply, async () => { const rows = await syncTemplates(acc); return { synced: rows.length, templates: rows }; });
+  });
+  api.get('/accounts/:id/templates-cache', async (req, reply) => {
+    const acc = await getAccount(req.params.id);
+    if (!acc) return httpError(reply, 404, 'CONTA_NAO_ENCONTRADA');
+    const { data, error } = await sb.from('wa_templates').select('*').eq('account_id', acc.id).order('name');
+    if (error) return dbFail(reply, error, 'templates cache');
+    return data;
+  });
+  api.post('/accounts/:id/templates', async (req, reply) => {
+    const acc = await accountWithWaba(req, reply); if (!acc) return;
+    const b = req.body || {};
+    const name = String(b.name || '').trim();
+    if (!/^[a-z0-9_]{1,512}$/.test(name)) return httpError(reply, 400, 'NOME_INVALIDO', { detail: 'so letras minusculas, numeros e _' });
+    const language = String(b.language || '').trim();
+    if (!language) return httpError(reply, 400, 'IDIOMA_OBRIGATORIO');
+    const category = String(b.category || '').toUpperCase();
+    if (!TEMPLATE_CATEGORIES.includes(category)) return httpError(reply, 400, 'CATEGORIA_INVALIDA', { permitidas: TEMPLATE_CATEGORIES });
+    const components = Array.isArray(b.components) ? b.components.map((c) => ({ ...c, type: String(c.type || '').toUpperCase() })) : [];
+    if (!components.some((c) => c.type === 'BODY' && String(c.text || '').trim())) return httpError(reply, 400, 'BODY_OBRIGATORIO');
+
+    let headerHandle = null, media = null;
+    if (b.header_media?.base64) {
+      let buf;
+      try { buf = Buffer.from(String(b.header_media.base64).replace(/^data:[^;]+;base64,/, ''), 'base64'); } catch { buf = null; }
+      if (!buf?.length) return httpError(reply, 400, 'MIDIA_INVALIDA');
+      const mime = String(b.header_media.mime || 'application/octet-stream');
+      const format = mime.startsWith('image/') ? 'IMAGE' : mime.startsWith('video/') ? 'VIDEO' : 'DOCUMENT';
+      const p = `templates/${acc.id}/${name}-${Date.now()}.${extFromMime(mime)}`;
+      const { error: upErr } = await sb.storage.from('wa-media').upload(p, buf, { contentType: mime, upsert: true });
+      if (upErr) return httpError(reply, 500, 'STORAGE_ERROR', { detail: upErr.message });
+      media = { media_path: p, media_url: publicMediaUrl(p), mime };
+      try { headerHandle = await metaUploadMedia(acc, buf, mime, b.header_media.filename); }
+      catch (e) {
+        if (e.code === 'APP_ID_OBRIGATORIO') return httpError(reply, 400, 'APP_ID_OBRIGATORIO', { detail: 'Informe o App ID na conta pra subir midia de template' });
+        return reply.code(502).send(metaErrorPayload(e));
+      }
+      let header = components.find((c) => c.type === 'HEADER');
+      if (!header) { header = { type: 'HEADER' }; components.unshift(header); }
+      header.format = format;
+      header.example = { header_handle: [headerHandle] };
+      delete header.text;
+    }
+    return withMeta(reply, async () => {
+      const created = await metaFetch(acc, `${acc.waba_id}/message_templates`, { method: 'POST', body: { name, language, category, components } });
+      const row = { account_id: acc.id, meta_id: created?.id || null, name, language, category: created?.category || category, status: created?.status || 'PENDING', components, synced_at: nowIso() };
+      const { error } = await sb.from('wa_templates').upsert(row, { onConflict: 'account_id,name,language' });
+      if (error) app.log.error({ err: error }, 'falha ao cachear template');
+      return reply.code(201).send({ id: created?.id || null, status: row.status, category: row.category, header_handle: headerHandle, ...(media || {}), template: row });
+    });
+  });
+
   // >>> [api-oficial] proximas rotas (inbox, templates, disparo, fluxos) entram aqui
 }, { prefix: '/api-oficial' });
 

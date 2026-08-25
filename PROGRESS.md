@@ -11,8 +11,8 @@ STATUS: TODO | IN_PROGRESS | DONE | BLOCKED
 
 ## Estado atual
 
-- Tarefa em foco: T7 (templates)
-- Ultima stack verde: 2026-08-25 17:50 (`./verify.sh t6` = 0)
+- Tarefa em foco: T8 (disparo / broadcast)
+- Ultima stack verde: 2026-08-25 18:05 (`./verify.sh t7` = 0)
 
 ## Log
 
@@ -23,8 +23,8 @@ STATUS: TODO | IN_PROGRESS | DONE | BLOCKED
 - T4  | DONE | 2026-08-25 17:02 | /api-oficial/accounts CRUD (+/test, /register, /subscribe, /subscribed-apps) com requireAuth; publicAccount() remove access_token/app_secret e expoe has_*; PATCH com segredo vazio mantem o atual; erros da Meta viram 502 META_ERROR {code,message}. Front: aba Contas (tabela, dialog de conta, dialog de PIN, badges). 14 testes verdes (11 API + 3 no Chrome).
 - T5  | DONE | 2026-08-25 17:15 | GET /whatsapp/webhook (verify_token de qualquer conta -> ecoa challenge); POST valida X-Hub-Signature-256 sobre rawBody (timingSafeEqual), acha conta por phone_number_id, grava wa_webhook_events (mesmo invalido), upsert contato, abre/reabre conversa (+unread, janela +24h), insere wa_messages (dedup por wamid), baixa midia da Meta pro bucket wa-media (URL publica via SUPABASE_PUBLIC_URL), status delivered/read/failed atualiza wa_messages e whatsapp_api_sends (nao rebaixa status). Gancho waOnInbound pros fluxos (T9). 9 testes verdes.
 - T6  | DONE | 2026-08-25 17:50 | /api-oficial/conversations (lista c/ contato+conta, filtros status/assigned/account/search), /:id, /:id/messages, /:id/notes (GET/POST), /:id/(assign|release|read|status|send), PATCH /contacts/:id. waSendAndRecord() compartilhado (texto/template, grava sucesso ou falha em wa_messages, atualiza conversa/contato). Texto fora da janela -> 409 JANELA_FECHADA; template sempre pode. Front: inbox 3 colunas (lista com filtros, thread com bolhas in/out/fluxo/midia/status, composer que troca pra template quando a janela fecha, lateral com contato/tags/opt-out/notas), Realtime em wa_messages e wa_conversations. 14 testes verdes (9 API incl. Realtime em Node + 5 no Chrome).
-- T7  | IN_PROGRESS | 2026-08-25 17:51 | Templates: sync/listar/criar (+ cabecalho de midia via upload resumable) e cache em wa_templates.
-- T8  | TODO | -            | -
+- T7  | DONE | 2026-08-25 18:05 | GET /accounts/:id/templates (ao vivo, paginado), POST /sync-templates (upsert em wa_templates por account+name+language, remove os que sumiram), GET /templates-cache, POST /templates (valida nome/idioma/categoria/BODY; header_media base64 -> Storage wa-media/templates/... -> upload resumable na Meta (POST /{app_id}/uploads + POST /{upload_id} com Authorization: OAuth) -> header_handle no HEADER -> POST message_templates -> cache). Front: aba Templates (select de conta, Sincronizar, tabela com resumo, dialog de novo template com cabecalho texto/midia, corpo, rodape, ate 3 quick replies + URL). App.templateOptions(accountId) alimenta o composer do inbox (e o disparo na T8). 9 testes verdes.
+- T8  | IN_PROGRESS | 2026-08-25 18:06 | Disparo: broadcastJobs em memoria, CSV, opt-out, sends-report com WA_ERROR_HELP.
 - T9  | TODO | -            | -
 - T10 | BLOCKED | -         | Deploy real aguarda VPS + dominio + DNS do dono.
 - T11 | TODO | -            | -
