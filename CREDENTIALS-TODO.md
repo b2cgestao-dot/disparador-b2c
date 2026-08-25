@@ -8,11 +8,14 @@ codigo deve ter uma linha aqui. O agente ADICIONA itens conforme constroi.
 
 ## Supabase (trocar local -> producao)
 
-- [ ] `SUPABASE_URL` (Project Settings -> API -> Project URL)
-- [ ] `SUPABASE_ANON_KEY` (anon public) -> vai no topo do `web/index.html`
-- [ ] `SUPABASE_SERVICE_KEY` (service_role, SECRETA) -> `.env` do backend
-- [ ] Rodar `db/schema.sql` no SQL Editor do projeto de producao
-- [ ] Criar o(s) usuario(s) atendente(s) em Authentication -> Users
+- [x] Projeto de producao criado via CLI em 2026-08-25: **DISPARADOR-B2C**
+      (ref `sdnciriewxconxyoehwo`, org "Israel Bugia", sa-east-1).
+      Dashboard: https://supabase.com/dashboard/project/sdnciriewxconxyoehwo
+- [x] `SUPABASE_URL` = `https://sdnciriewxconxyoehwo.supabase.co` (salvo em `.env.production`, fora do git)
+- [x] `SUPABASE_ANON_KEY` (salvo em `.env.production`) -> FALTA colar no topo do `web/index.html` na hora do deploy
+- [x] `SUPABASE_SERVICE_KEY` (salvo em `.env.production`) -> FALTA copiar pro `.env` da VPS
+- [x] `db/schema.sql` aplicado no projeto de producao via `supabase db query --linked -f db/schema.sql` (2x, idempotente): 9 tabelas, publication realtime, bucket wa-media
+- [ ] Criar o(s) usuario(s) atendente(s) em Authentication -> Users (ou `supabase` admin API)
 
 ## Meta / WhatsApp Cloud API (por conta, cadastrado na tela de Contas)
 

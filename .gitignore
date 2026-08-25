@@ -5,3 +5,6 @@ node_modules/
 supabase/.temp/
 supabase/.branches/
 .claude/
+.env.production
+.env.*
+!.env.example

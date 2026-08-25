@@ -29,6 +29,10 @@ STATUS: TODO | IN_PROGRESS | DONE | BLOCKED
 - T10 | BLOCKED | 2026-08-25 19:15 | Artefatos PRONTOS e validados (server/Dockerfile node:22-alpine, docker-compose.prod.yml api+caddy com healthcheck/restart, Caddyfile com no-cache na raiz / + proxy /api/* /whatsapp/* /health, DEPLOY.md runbook scp + compose up -d --build + checklist go-live). `docker compose config` e `caddy validate` passam (7 testes verdes). Deploy real BLOCKED: aguardando VPS + dominio + DNS do dono (CREDENTIALS-TODO.md).
 - T11 | DONE | 2026-08-25 19:30 | RELATORIO-FINAL.md gerado; `./verify.sh all` verde (102 testes em 17 arquivos); commit final. Stack derrubada ao final (modo economico).
 
+## Pos-construcao
+
+- 2026-08-25 17:22 | Projeto Supabase de PRODUCAO criado via CLI (`supabase projects create DISPARADOR-B2C --org-id vercel_icfg_aAen91ENTQdDb62IKqHupBKS --region sa-east-1 --size micro`), ref `sdnciriewxconxyoehwo`. `supabase link` feito. `db/schema.sql` aplicado 2x via `supabase db query --linked -f`. Chaves em `.env.production` (gitignored). Licao: logo apos ACTIVE_HEALTHY o schema `storage` ainda nao existe por ~1 min; esperar `to_regclass('storage.buckets')` antes de aplicar o schema.
+
 ## Blockers abertos
 
 - BLUEPRINT AUSENTE: o arquivo `BLUEPRINT-Disparador-WhatsApp-API-Oficial.md` nao
