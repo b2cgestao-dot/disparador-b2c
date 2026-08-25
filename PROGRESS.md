@@ -11,15 +11,15 @@ STATUS: TODO | IN_PROGRESS | DONE | BLOCKED
 
 ## Estado atual
 
-- Tarefa em foco: T2 (backend esqueleto)
-- Ultima stack verde: 2026-08-25 16:28 (`./verify.sh t1` = 0)
+- Tarefa em foco: T3 (front esqueleto + auth)
+- Ultima stack verde: 2026-08-25 16:33 (`./verify.sh t2` = 0)
 
 ## Log
 
 - T0  | DONE | 2026-08-25 16:20 | Harness completo: colima+docker+compose instalados via brew; supabase local (6 containers, sem studio/analytics/etc); mock-meta (:4000) emulando Graph + /_simulate/inbound assinado; backend esqueleto (:3000, rawBody, 50MB, auth, metaFetch); schema.sql completo; seed (teste@disparador.local / Teste123! + conta PNID-TEST-0001); verify.sh (smoke|tN|all|up|down, --down). `./verify.sh smoke` verde.
 - T1  | DONE | 2026-08-25 16:28 | db/schema.sql idempotente (9 tabelas, RLS select authenticated, grants explicitos, colunas secretas da conta ocultas de authenticated, publication realtime, bucket wa-media publico). test/t1_schema.test.js verde (6 testes).
-- T2  | IN_PROGRESS | 2026-08-25 16:29 | Esqueleto ja existe desde T0; escrevendo test/t2_backend.test.js.
-- T3  | TODO | -            | -
+- T2  | DONE | 2026-08-25 16:33 | Fastify 5 :3000, CORS, bodyLimit 50MB, parser JSON preservando rawBody, auth por JWT do Supabase (requireAuth), metaFetch via META_BASE_URL, /health, /_debug/echo-hmac (so dev). test/t2_backend.test.js verde (6 testes, inclui checagem estatica de rota duplicada).
+- T3  | IN_PROGRESS | 2026-08-25 16:34 | web/index.html + teste via Chrome headless (CDP com WebSocket nativo do Node).
 - T4  | TODO | -            | -
 - T5  | TODO | -            | -
 - T6  | TODO | -            | -

@@ -46,23 +46,23 @@ Aceitacao:
 
 ---
 
-## [~] T2 - Backend esqueleto (Fastify)
+## [x] T2 - Backend esqueleto (Fastify)
 
 Entrega: `server/src/index.js` na porta 3000, CORS, parser que preserva
 `rawBody`, `bodyLimit` 50 MB, cliente Supabase com service key, leitura de
 `META_BASE_URL`, rota `GET /health`.
 
 Aceitacao:
-- [ ] `GET /health` responde 200 com corpo de status.
-- [ ] Um POST de corpo com ~2 MB NAO retorna 413.
-- [ ] O `rawBody` fica disponivel no handler (teste calcula um HMAC do corpo e
+- [x] `GET /health` responde 200 com corpo de status.
+- [x] Um POST de corpo com ~2 MB NAO retorna 413.
+- [x] O `rawBody` fica disponivel no handler (teste calcula um HMAC do corpo e
       confere que o backend leu o mesmo corpo cru).
-- [ ] Subir o processo com duas rotas de mesmo nome deve ser impossivel: existe
+- [x] Subir o processo com duas rotas de mesmo nome deve ser impossivel: existe
       um teste/checagem que garante que nao ha rota duplicada.
 
 ---
 
-## [ ] T3 - Front esqueleto + Auth
+## [~] T3 - Front esqueleto + Auth
 
 Entrega: `web/index.html` (servido estatico), login via Supabase Auth, menu
 lateral com `data-view`, `sb`/`API_URL` no topo do script, troca de views por
