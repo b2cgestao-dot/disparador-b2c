@@ -287,6 +287,179 @@ app.register(async function apiOficial(api) {
   // >>> [api-oficial] proximas rotas (inbox, templates, disparo, fluxos) entram aqui
 }, { prefix: '/api-oficial' });
 
+// ---------------------------------------------------------------- [6] webhook
+const MEDIA_TYPES = ['image', 'audio', 'video', 'document', 'sticker'];
+const MIME_EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/aac': 'aac', 'audio/amr': 'amr', 'video/mp4': 'mp4', 'video/3gpp': '3gp', 'application/pdf': 'pdf', 'text/plain': 'txt' };
+const extFromMime = (mime) => MIME_EXT[String(mime || '').split(';')[0].trim()] || 'bin';
+const publicMediaUrl = (p) => `${SUPABASE_PUBLIC_URL}/storage/v1/object/public/wa-media/${p.split('/').map(encodeURIComponent).join('/')}`;
+const STATUS_RANK = { received: 0, queued: 0, accepted: 1, sent: 2, delivered: 3, read: 4, failed: 9 };
+let waOnInbound = null; // gancho preenchido pelos fluxos (T9): (account, contact, conversation, message) => Promise
+
+// Anti-bug #3: assinatura sobre o corpo CRU, comparacao em tempo constante.
+function verifySignature(rawBody, header, appSecret) {
+  if (!header || !appSecret) return false;
+  const expected = Buffer.from('sha256=' + crypto.createHmac('sha256', appSecret).update(rawBody).digest('hex'));
+  const got = Buffer.from(String(header).trim());
+  return expected.length === got.length && crypto.timingSafeEqual(expected, got);
+}
+
+function inboundBody(msg) {
+  switch (msg.type) {
+    case 'text': return msg.text?.body || '';
+    case 'button': return msg.button?.text || msg.button?.payload || '';
+    case 'interactive': return msg.interactive?.button_reply?.title || msg.interactive?.list_reply?.title || '';
+    case 'reaction': return msg.reaction?.emoji || '';
+    case 'location': return [msg.location?.name, msg.location?.address, `${msg.location?.latitude},${msg.location?.longitude}`].filter(Boolean).join(' - ');
+    case 'contacts': return (msg.contacts || []).map((c) => c.name?.formatted_name).filter(Boolean).join(', ');
+    default: return msg[msg.type]?.caption || msg[msg.type]?.filename || '';
+  }
+}
+
+// Baixa a midia da Meta (GET /{media_id} -> url -> bytes) e sobe no bucket wa-media.
+async function downloadMediaToStorage(account, mediaId, mimeHint, wamid) {
+  const meta = await metaFetch(account, mediaId);
+  const res = await fetch(meta.url, { headers: { Authorization: `Bearer ${account.access_token}` } });
+  if (!res.ok) throw new Error(`download da midia falhou: HTTP ${res.status}`);
+  const buf = Buffer.from(await res.arrayBuffer());
+  const contentType = meta.mime_type || mimeHint || 'application/octet-stream';
+  const safe = String(wamid || `m-${Date.now()}`).replace(/[^a-zA-Z0-9._-]/g, '_');
+  const p = `${account.id}/${safe}.${extFromMime(contentType)}`;
+  const { error } = await sb.storage.from('wa-media').upload(p, buf, { contentType, upsert: true });
+  if (error) throw new Error('upload no storage falhou: ' + error.message);
+  return { path: p, url: publicMediaUrl(p), mime: contentType, size: buf.length };
+}
+
+async function upsertContact(account, phone, name) {
+  const { data: existing, error: e0 } = await sb.from('wa_contacts').select('*').eq('account_id', account.id).eq('phone', phone).maybeSingle();
+  if (e0) throw e0;
+  const patch = { last_inbound_at: nowIso() };
+  if (name && !existing?.name) patch.name = name;
+  if (existing) {
+    const { data, error } = await sb.from('wa_contacts').update(patch).eq('id', existing.id).select('*').single();
+    if (error) throw error;
+    return data;
+  }
+  const { data, error } = await sb.from('wa_contacts').insert({ account_id: account.id, phone, name: name || null, ...patch }).select('*').single();
+  if (error) { if (error.code === '23505') return upsertContact(account, phone, name); throw error; }
+  return data;
+}
+
+// Chegou mensagem: abre/reabre a conversa, incrementa nao-lidas e renova a janela de 24h (anti-bug #12).
+async function touchConversationInbound(account, contact, preview) {
+  const { data: existing, error: e0 } = await sb.from('wa_conversations').select('*').eq('account_id', account.id).eq('contact_id', contact.id).maybeSingle();
+  if (e0) throw e0;
+  const patch = {
+    status: 'open', closed_at: null, closed_by: null,
+    unread_count: (existing?.unread_count || 0) + 1,
+    last_message_at: nowIso(), last_message_preview: String(preview || '').slice(0, 200), last_direction: 'in',
+    window_expires_at: hoursFromNow(24),
+  };
+  if (existing) {
+    const { data, error } = await sb.from('wa_conversations').update(patch).eq('id', existing.id).select('*').single();
+    if (error) throw error;
+    return data;
+  }
+  const { data, error } = await sb.from('wa_conversations').insert({ account_id: account.id, contact_id: contact.id, ...patch }).select('*').single();
+  if (error) { if (error.code === '23505') return touchConversationInbound(account, contact, preview); throw error; }
+  return data;
+}
+
+async function processInboundMessage(account, value, msg) {
+  if (msg.id) {
+    const { data: dup } = await sb.from('wa_messages').select('id').eq('wamid', msg.id).maybeSingle();
+    if (dup) return { skipped: 'duplicado', id: dup.id };
+  }
+  const from = onlyDigits(msg.from);
+  if (!from) return { skipped: 'sem remetente' };
+  const profileName = (value.contacts || []).find((c) => onlyDigits(c.wa_id) === from)?.profile?.name;
+  const contact = await upsertContact(account, from, profileName);
+  const type = msg.type || 'unsupported';
+  const row = { account_id: account.id, contact_id: contact.id, direction: 'in', type, body: inboundBody(msg), wamid: msg.id || null, status: 'received', payload: msg };
+  if (MEDIA_TYPES.includes(type) && msg[type]?.id) {
+    row.media_mime = msg[type].mime_type || null;
+    row.media_filename = msg[type].filename || null;
+    try {
+      const m = await downloadMediaToStorage(account, msg[type].id, msg[type].mime_type, msg.id);
+      row.media_url = m.url; row.media_path = m.path; row.media_mime = m.mime;
+    } catch (e) {
+      app.log.warn({ err: e, media: msg[type].id }, 'falha ao baixar midia');
+      row.error = { media: String(e.message) };
+    }
+  }
+  const preview = row.body || `[${type}]`;
+  const conv = await touchConversationInbound(account, contact, preview);
+  row.conversation_id = conv.id;
+  const { data: saved, error } = await sb.from('wa_messages').insert(row).select('*').single();
+  if (error) { if (error.code === '23505') return { skipped: 'duplicado' }; throw error; }
+  if (waOnInbound) waOnInbound(account, contact, conv, saved).catch((e) => app.log.error({ err: e }, 'erro no fluxo'));
+  return { message_id: saved.id, conversation_id: conv.id };
+}
+
+async function processStatus(account, st) {
+  const wamid = st.id; const status = st.status;
+  if (!wamid || !status) return;
+  const { data: cur } = await sb.from('wa_messages').select('id, status').eq('wamid', wamid).maybeSingle();
+  if (cur && (STATUS_RANK[status] ?? 0) < (STATUS_RANK[cur.status] ?? 0) && cur.status !== 'failed') return; // nao rebaixa read -> delivered
+  const patch = { status };
+  if (status === 'failed' && st.errors) patch.error = st.errors;
+  if (cur) await sb.from('wa_messages').update(patch).eq('id', cur.id);
+  const sendPatch = { delivery_status: status };
+  if (status === 'failed') {
+    sendPatch.status = 'failed';
+    sendPatch.error_code = st.errors?.[0]?.code ?? null;
+    sendPatch.error_message = st.errors?.[0]?.title || st.errors?.[0]?.message || null;
+    sendPatch.error = st.errors || null;
+  }
+  await sb.from('whatsapp_api_sends').update(sendPatch).eq('wamid', wamid);
+}
+
+async function logWebhookEvent(accountId, pnid, eventType, valid, payload) {
+  const { error } = await sb.from('wa_webhook_events').insert({ account_id: accountId, phone_number_id: pnid, event_type: eventType, signature_valid: valid, payload });
+  if (error) app.log.error({ err: error }, 'falha ao gravar wa_webhook_events');
+}
+
+// Verificacao do webhook (Meta manda hub.mode/hub.verify_token/hub.challenge)
+app.get('/whatsapp/webhook', async (req, reply) => {
+  const mode = req.query['hub.mode']; const token = req.query['hub.verify_token']; const challenge = req.query['hub.challenge'];
+  if (mode !== 'subscribe' || !token) return reply.code(403).type('text/plain').send('forbidden');
+  const { data } = await sb.from('whatsapp_api_accounts').select('id').eq('verify_token', String(token)).limit(1);
+  if (!data?.length) return reply.code(403).type('text/plain').send('forbidden');
+  return reply.type('text/plain').send(String(challenge ?? ''));
+});
+
+// Eventos da Meta (mensagens e status). Acha a conta pelo phone_number_id e valida a assinatura.
+app.post('/whatsapp/webhook', async (req, reply) => {
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const raw = req.rawBody || Buffer.alloc(0);
+  const changes = (body.entry || []).flatMap((e) => e.changes || []);
+  const pnid = changes.map((c) => c.value?.metadata?.phone_number_id).find(Boolean) || null;
+  const eventType = changes.some((c) => c.value?.messages?.length) ? 'messages' : changes.some((c) => c.value?.statuses?.length) ? 'statuses' : 'unknown';
+  const account = pnid ? await getAccountByPnid(pnid) : null;
+  if (!account) {
+    await logWebhookEvent(null, pnid, eventType, null, body);
+    return httpError(reply, 404, 'CONTA_NAO_ENCONTRADA', { phone_number_id: pnid });
+  }
+  const valid = verifySignature(raw, req.headers['x-hub-signature-256'], account.app_secret);
+  await logWebhookEvent(account.id, pnid, eventType, valid, body);
+  if (!valid) return httpError(reply, 401, 'ASSINATURA_INVALIDA');
+
+  let messages = 0, statuses = 0; const errors = [];
+  for (const ch of changes) {
+    const v = ch.value || {};
+    const chPnid = v.metadata?.phone_number_id;
+    const acc = (!chPnid || chPnid === pnid) ? account : ((await getAccountByPnid(chPnid)) || account);
+    for (const m of v.messages || []) {
+      try { await processInboundMessage(acc, v, m); messages++; }
+      catch (e) { errors.push(String(e.message)); app.log.error({ err: e, wamid: m.id }, 'erro processando inbound'); }
+    }
+    for (const st of v.statuses || []) {
+      try { await processStatus(acc, st); statuses++; }
+      catch (e) { errors.push(String(e.message)); app.log.error({ err: e, wamid: st.id }, 'erro processando status'); }
+    }
+  }
+  return { ok: true, messages, statuses, errors };
+});
+
 // ------------------------------------------------------------ [11] static web
 // Em producao o Caddy serve o web/index.html; localmente o backend serve pra facilitar.
 function serveIndex(req, reply) {

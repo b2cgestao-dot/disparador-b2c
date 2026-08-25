@@ -11,8 +11,8 @@ STATUS: TODO | IN_PROGRESS | DONE | BLOCKED
 
 ## Estado atual
 
-- Tarefa em foco: T5 (webhook da Meta)
-- Ultima stack verde: 2026-08-25 17:02 (`./verify.sh t4` = 0)
+- Tarefa em foco: T6 (inbox multiagente)
+- Ultima stack verde: 2026-08-25 17:15 (`./verify.sh t5` = 0)
 
 ## Log
 
@@ -21,8 +21,8 @@ STATUS: TODO | IN_PROGRESS | DONE | BLOCKED
 - T2  | DONE | 2026-08-25 16:33 | Fastify 5 :3000, CORS, bodyLimit 50MB, parser JSON preservando rawBody, auth por JWT do Supabase (requireAuth), metaFetch via META_BASE_URL, /health, /_debug/echo-hmac (so dev). test/t2_backend.test.js verde (6 testes, inclui checagem estatica de rota duplicada).
 - T3  | DONE | 2026-08-25 16:45 | web/index.html (1 arquivo, Tailwind+supabase-js via CDN): login Supabase Auth, menu lateral data-view, views inicio/apioficial/config, abas contas/inbox/templates/disparo/fluxos/relatorio, App.api() com JWT, API_URL='/api' (backend faz rewriteUrl tirando /api). Backend serve web/ em `/` localmente. test/t3_front.test.js roda em Chrome headless real via CDP (test/browser.mjs, WebSocket nativo do Node 22, zero deps): 8 testes verdes.
 - T4  | DONE | 2026-08-25 17:02 | /api-oficial/accounts CRUD (+/test, /register, /subscribe, /subscribed-apps) com requireAuth; publicAccount() remove access_token/app_secret e expoe has_*; PATCH com segredo vazio mantem o atual; erros da Meta viram 502 META_ERROR {code,message}. Front: aba Contas (tabela, dialog de conta, dialog de PIN, badges). 14 testes verdes (11 API + 3 no Chrome).
-- T5  | IN_PROGRESS | 2026-08-25 17:03 | GET/POST /whatsapp/webhook, assinatura sobre rawBody, contato/conversa/mensagem, midia no Storage, eventos crus.
-- T6  | TODO | -            | -
+- T5  | DONE | 2026-08-25 17:15 | GET /whatsapp/webhook (verify_token de qualquer conta -> ecoa challenge); POST valida X-Hub-Signature-256 sobre rawBody (timingSafeEqual), acha conta por phone_number_id, grava wa_webhook_events (mesmo invalido), upsert contato, abre/reabre conversa (+unread, janela +24h), insere wa_messages (dedup por wamid), baixa midia da Meta pro bucket wa-media (URL publica via SUPABASE_PUBLIC_URL), status delivered/read/failed atualiza wa_messages e whatsapp_api_sends (nao rebaixa status). Gancho waOnInbound pros fluxos (T9). 9 testes verdes.
+- T6  | IN_PROGRESS | 2026-08-25 17:16 | Inbox: endpoints de conversas + front 3 colunas + Realtime.
 - T7  | TODO | -            | -
 - T8  | TODO | -            | -
 - T9  | TODO | -            | -

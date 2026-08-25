@@ -96,7 +96,7 @@ Aceitacao:
 
 ---
 
-## [~] T5 - Webhook da Meta (respostas chegando)
+## [x] T5 - Webhook da Meta (respostas chegando)
 
 Entrega: `GET /whatsapp/webhook` (verificacao com `hub.challenge`) e
 `POST /whatsapp/webhook` (acha conta por `phone_number_id`, valida
@@ -104,17 +104,17 @@ Entrega: `GET /whatsapp/webhook` (verificacao com `hub.challenge`) e
 midia no Storage, grava evento cru em `wa_webhook_events`).
 
 Aceitacao:
-- [ ] GET do webhook com o verify_token certo ecoa o `hub.challenge`.
-- [ ] `POST /_simulate/inbound` do mock (assinado com o app_secret da conta) faz
+- [x] GET do webhook com o verify_token certo ecoa o `hub.challenge`.
+- [x] `POST /_simulate/inbound` do mock (assinado com o app_secret da conta) faz
       a mensagem aparecer em `wa_messages` e criar/atualizar `wa_conversations`
       e `wa_contacts`.
-- [ ] Assinatura invalida e rejeitada (401/403), sem gravar mensagem.
-- [ ] Mensagem de midia salva o arquivo no bucket `wa-media` e grava a URL.
-- [ ] `window_expires_at` da conversa e setado 24h a frente na entrada.
+- [x] Assinatura invalida e rejeitada (401/403), sem gravar mensagem.
+- [x] Mensagem de midia salva o arquivo no bucket `wa-media` e grava a URL.
+- [x] `window_expires_at` da conversa e setado 24h a frente na entrada.
 
 ---
 
-## [ ] T6 - Inbox multiagente
+## [~] T6 - Inbox multiagente
 
 Entrega: leitura de conversas/mensagens/notas (front le direto do Supabase +
 Realtime), e acoes via backend: enviar (com janela 24h), atribuir, liberar,
