@@ -11,6 +11,7 @@
   [hidden] { display: none !important; }
   .nav-item.active { background: rgb(22 163 74 / 0.18); color: #fff; }
   .tab-btn.active { border-color: #16a34a; color: #14532d; font-weight: 600; }
+  .inbox-filter.active { background: #16a34a; color: #fff; border-color: #16a34a; }
   .msg-in { background: #fff; }
   .msg-out { background: #dcfce7; }
   .msg-flow { background: #ede9fe; }
@@ -113,7 +114,74 @@
               </table>
             </div>
           </div>
-          <div data-tab-panel="inbox" class="h-full" hidden><p class="p-6 text-sm text-slate-500">Inbox: em construcao (T6).</p></div>
+          <div data-tab-panel="inbox" class="h-full" hidden>
+            <div class="h-full flex min-h-0">
+              <!-- lista de conversas -->
+              <div class="w-80 shrink-0 border-r bg-white flex flex-col min-h-0">
+                <div class="p-3 border-b space-y-2">
+                  <select id="inbox-account" class="w-full border rounded-lg px-2 py-1.5 text-sm"></select>
+                  <input id="inbox-search" placeholder="Buscar nome ou telefone" class="w-full border rounded-lg px-2 py-1.5 text-sm" />
+                  <div class="flex gap-1 text-xs">
+                    <button data-inbox-filter="open" class="inbox-filter px-2 py-1 rounded-full border">Abertas</button>
+                    <button data-inbox-filter="mine" class="inbox-filter px-2 py-1 rounded-full border">Minhas</button>
+                    <button data-inbox-filter="unassigned" class="inbox-filter px-2 py-1 rounded-full border">Sem dono</button>
+                    <button data-inbox-filter="closed" class="inbox-filter px-2 py-1 rounded-full border">Fechadas</button>
+                  </div>
+                </div>
+                <div id="inbox-list" class="flex-1 overflow-auto"></div>
+              </div>
+              <!-- thread -->
+              <div class="flex-1 min-w-0 flex flex-col min-h-0">
+                <div id="thread-empty" class="flex-1 grid place-items-center text-sm text-slate-400">Selecione uma conversa</div>
+                <div id="thread" class="flex-1 flex flex-col min-h-0" hidden>
+                  <div class="border-b bg-white px-4 py-2 flex items-center justify-between gap-2">
+                    <div class="min-w-0">
+                      <div id="thread-name" class="font-medium truncate"></div>
+                      <div class="text-xs text-slate-500"><span id="thread-phone" class="font-mono"></span> · <span id="thread-window"></span> · <span id="thread-assigned"></span></div>
+                    </div>
+                    <div class="flex gap-1 text-xs whitespace-nowrap">
+                      <button id="th-assign" class="px-2 py-1 rounded border hover:bg-slate-50">Assumir</button>
+                      <button id="th-release" class="px-2 py-1 rounded border hover:bg-slate-50">Liberar</button>
+                      <button id="th-close" class="px-2 py-1 rounded border hover:bg-slate-50">Fechar</button>
+                      <button id="th-reopen" class="px-2 py-1 rounded border hover:bg-slate-50" hidden>Reabrir</button>
+                    </div>
+                  </div>
+                  <div id="thread-messages" class="flex-1 overflow-auto p-4 space-y-2"></div>
+                  <div class="border-t bg-white p-3">
+                    <div id="composer-closed" class="text-sm space-y-2" hidden>
+                      <p class="text-amber-700"><b>Janela de 24h fechada.</b> So e possivel enviar um template aprovado.</p>
+                      <div class="flex gap-2">
+                        <select id="composer-template" class="flex-1 border rounded-lg px-2 py-1.5 text-sm"></select>
+                        <button id="composer-send-template" class="bg-green-600 text-white rounded-lg px-3 py-1.5 text-sm">Enviar template</button>
+                      </div>
+                    </div>
+                    <div id="composer-open" class="flex gap-2">
+                      <textarea id="composer-text" rows="2" placeholder="Escreva a resposta (Enter envia, Shift+Enter quebra linha)" class="flex-1 border rounded-lg px-3 py-2 text-sm"></textarea>
+                      <button id="composer-send" class="bg-green-600 hover:bg-green-700 text-white rounded-lg px-4 text-sm">Enviar</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <!-- lateral: contato + notas -->
+              <aside id="thread-side" class="w-72 shrink-0 border-l bg-white p-4 text-sm space-y-4 overflow-auto" hidden>
+                <div>
+                  <div class="text-xs uppercase text-slate-400 mb-1">Contato</div>
+                  <input id="side-name" class="w-full border rounded-lg px-2 py-1.5" placeholder="Nome" />
+                  <div id="side-phone" class="font-mono text-xs text-slate-500 mt-1"></div>
+                </div>
+                <div>
+                  <div class="text-xs uppercase text-slate-400 mb-1">Tags (separadas por virgula)</div>
+                  <input id="side-tags" class="w-full border rounded-lg px-2 py-1.5" placeholder="vip, sp" />
+                </div>
+                <label class="flex items-center gap-2"><input id="side-optout" type="checkbox" /> Opt-out (nao receber disparos)</label>
+                <div>
+                  <div class="text-xs uppercase text-slate-400 mb-1">Notas internas</div>
+                  <div id="side-notes" class="space-y-2 mb-2"></div>
+                  <div class="flex gap-1"><input id="side-note-text" class="flex-1 border rounded-lg px-2 py-1.5" placeholder="Nova nota" /><button id="side-note-add" class="px-2 rounded-lg border">+</button></div>
+                </div>
+              </aside>
+            </div>
+          </div>
           <div data-tab-panel="templates" class="p-6" hidden><p class="text-sm text-slate-500">Templates: em construcao (T7).</p></div>
           <div data-tab-panel="disparo" class="p-6" hidden><p class="text-sm text-slate-500">Disparo: em construcao (T8).</p></div>
           <div data-tab-panel="fluxos" class="p-6" hidden><p class="text-sm text-slate-500">Fluxos: em construcao (T9).</p></div>
@@ -414,6 +482,186 @@ $('#pin-form').addEventListener('submit', async (ev) => {
   try { await apiFetch(`/api-oficial/accounts/${id}/register`, { method: 'POST', body: { pin } }); d.close(); toast('Numero registrado na Cloud API', 'ok'); loadAccounts(); }
   catch (e) { $('#pin-error').textContent = metaErrMsg(e); $('#pin-error').hidden = false; }
 });
+
+// ============================================================= [T6] INBOX ====
+const Inbox = { account: null, filter: 'open', search: '', list: [], current: null, messages: [], notes: [], channel: null, templates: [] };
+App.inbox = Inbox;
+const fmtTime = (iso) => iso ? new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+const windowOpenFront = (c) => !!c?.window_expires_at && new Date(c.window_expires_at).getTime() > Date.now();
+
+async function inboxInit() {
+  if (!App.accounts.length) { try { App.accounts = await apiFetch('/api-oficial/accounts'); } catch (e) { toast(e.message, 'error'); } }
+  const sel = $('#inbox-account');
+  sel.innerHTML = '<option value="">Todas as contas</option>' + App.accounts.map((a) => `<option value="${a.id}">${esc(a.label)}</option>`).join('');
+  sel.value = Inbox.account || '';
+  $$('.inbox-filter').forEach((b) => b.classList.toggle('active', b.dataset.inboxFilter === Inbox.filter));
+  inboxSubscribe();
+  await inboxLoadList();
+}
+App.hooks.onTab.inbox = inboxInit;
+
+function inboxSubscribe() {
+  if (Inbox.channel) return;
+  let t = null;
+  const refresh = () => { clearTimeout(t); t = setTimeout(inboxLoadList, 250); };
+  Inbox.channel = sb.channel('inbox-realtime')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'wa_messages' }, (p) => {
+      if (Inbox.current && p.new.conversation_id === Inbox.current.id && !Inbox.messages.some((m) => m.id === p.new.id)) { Inbox.messages.push(p.new); renderMessages(); if (p.new.direction === 'in') apiFetch(`/api-oficial/conversations/${Inbox.current.id}/read`, { method: 'POST' }).catch(() => {}); }
+      refresh();
+    })
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'wa_messages' }, (p) => {
+      const i = Inbox.messages.findIndex((m) => m.id === p.new.id); if (i >= 0) { Inbox.messages[i] = { ...Inbox.messages[i], ...p.new }; renderMessages(); }
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'wa_conversations' }, (p) => {
+      if (Inbox.current && p.new?.id === Inbox.current.id) { Inbox.current = { ...Inbox.current, ...p.new }; renderThreadHeader(); }
+      refresh();
+    })
+    .subscribe();
+}
+
+async function inboxLoadList() {
+  const f = Inbox.filter;
+  const qs = new URLSearchParams({ status: f === 'closed' ? 'closed' : 'open', assigned: f === 'mine' ? 'me' : f === 'unassigned' ? 'unassigned' : 'all' });
+  if (Inbox.account) qs.set('account_id', Inbox.account);
+  if (Inbox.search) qs.set('search', Inbox.search);
+  try { Inbox.list = await apiFetch('/api-oficial/conversations?' + qs); } catch (e) { $('#inbox-list').innerHTML = `<p class="p-4 text-red-600 text-sm">${esc(e.message)}</p>`; return; }
+  renderInboxList();
+}
+function renderInboxList() {
+  const el = $('#inbox-list');
+  if (!Inbox.list.length) { el.innerHTML = '<p class="p-4 text-sm text-slate-400">Nenhuma conversa.</p>'; return; }
+  el.innerHTML = Inbox.list.map((c) => `
+    <div data-conv-id="${c.id}" class="px-3 py-2 border-b cursor-pointer hover:bg-slate-50 ${Inbox.current?.id === c.id ? 'bg-green-50' : ''}">
+      <div class="flex justify-between items-center gap-2">
+        <div class="font-medium text-sm truncate">${esc(c.contact?.name || c.contact?.phone || '?')}</div>
+        ${c.unread_count ? `<span class="badge bg-green-600 text-white">${c.unread_count}</span>` : ''}
+      </div>
+      <div class="text-xs text-slate-500 truncate">${c.last_direction === 'out' ? '&#8599; ' : ''}${esc(c.last_message_preview || '')}</div>
+      <div class="text-[10px] text-slate-400 flex justify-between"><span>${esc(c.account?.label || '')}${c.assigned_email ? ' · ' + esc(c.assigned_email) : ''}</span><span>${fmtTime(c.last_message_at)}</span></div>
+    </div>`).join('');
+}
+$('#inbox-list').addEventListener('click', (ev) => { const row = ev.target.closest('[data-conv-id]'); if (row) inboxOpen(row.dataset.convId); });
+$('#inbox-account').addEventListener('change', (ev) => { Inbox.account = ev.target.value || null; inboxLoadList(); });
+$('#inbox-search').addEventListener('input', (ev) => { Inbox.search = ev.target.value.trim(); clearTimeout(Inbox._st); Inbox._st = setTimeout(inboxLoadList, 250); });
+$$('.inbox-filter').forEach((b) => b.addEventListener('click', () => { Inbox.filter = b.dataset.inboxFilter; $$('.inbox-filter').forEach((x) => x.classList.toggle('active', x === b)); inboxLoadList(); }));
+
+async function inboxOpen(id) {
+  try {
+    const [conv, messages, notes] = await Promise.all([
+      apiFetch(`/api-oficial/conversations/${id}`), apiFetch(`/api-oficial/conversations/${id}/messages`), apiFetch(`/api-oficial/conversations/${id}/notes`),
+    ]);
+    Inbox.current = conv; Inbox.messages = messages; Inbox.notes = notes;
+  } catch (e) { toast(e.message, 'error'); return; }
+  $('#thread-empty').hidden = true; $('#thread').hidden = false; $('#thread-side').hidden = false;
+  renderThreadHeader(); renderMessages(); renderSide(); renderInboxList();
+  await loadTemplatesForComposer();
+  if (Inbox.current.unread_count > 0) apiFetch(`/api-oficial/conversations/${id}/read`, { method: 'POST' }).then(() => inboxLoadList()).catch(() => {});
+}
+App.inboxOpen = inboxOpen;
+
+function renderThreadHeader() {
+  const c = Inbox.current; if (!c) return;
+  $('#thread-name').textContent = c.contact?.name || c.contact?.phone || '';
+  $('#thread-phone').textContent = c.contact?.phone || '';
+  const open = windowOpenFront(c);
+  $('#thread-window').innerHTML = open ? `<span class="text-green-700">janela aberta ate ${fmtTime(c.window_expires_at)}</span>` : '<span class="text-amber-700">janela de 24h fechada</span>';
+  $('#thread-assigned').textContent = c.assigned_email ? 'com ' + c.assigned_email : 'sem dono';
+  $('#th-assign').hidden = c.assigned_to === App.state.user?.id; $('#th-release').hidden = !c.assigned_to;
+  $('#th-close').hidden = c.status === 'closed'; $('#th-reopen').hidden = c.status !== 'closed';
+  $('#composer-open').hidden = !open; $('#composer-closed').hidden = open;
+}
+function renderMessage(m) {
+  const mine = m.direction === 'out';
+  const cls = m.is_flow ? 'msg-flow' : mine ? 'msg-out' : 'msg-in';
+  let media = '';
+  if (m.media_url) {
+    if ((m.media_mime || '').startsWith('image/')) media = `<a href="${esc(m.media_url)}" target="_blank"><img src="${esc(m.media_url)}" class="max-w-[240px] rounded mb-1" /></a>`;
+    else if ((m.media_mime || '').startsWith('audio/')) media = `<audio controls src="${esc(m.media_url)}" class="mb-1"></audio>`;
+    else if ((m.media_mime || '').startsWith('video/')) media = `<video controls src="${esc(m.media_url)}" class="max-w-[240px] rounded mb-1"></video>`;
+    else media = `<a href="${esc(m.media_url)}" target="_blank" class="underline text-blue-700 block mb-1">&#128206; ${esc(m.media_filename || m.type)}</a>`;
+  } else if (['image', 'audio', 'video', 'document', 'sticker'].includes(m.type)) media = `<span class="text-xs text-slate-500">[${esc(m.type)} nao disponivel]</span>`;
+  const status = mine ? `<span class="ml-2 ${m.status === 'failed' ? 'text-red-600' : 'text-slate-400'}">${m.status === 'read' ? '&#10003;&#10003;' : m.status === 'delivered' ? '&#10003;&#10003;' : m.status === 'failed' ? 'falhou' : '&#10003;'}</span>` : '';
+  const err = m.status === 'failed' && m.error ? `<div class="text-[11px] text-red-600 mt-1">${esc(m.error.message || m.error.code || '')}</div>` : '';
+  const label = m.is_flow ? '<div class="text-[10px] text-violet-700 font-medium">Fluxo automatico</div>' : (mine && m.sent_by_email ? `<div class="text-[10px] text-slate-500">${esc(m.sent_by_email)}</div>` : '');
+  return `<div data-msg-id="${m.id}" class="flex ${mine ? 'justify-end' : 'justify-start'}"><div class="${cls} max-w-[70%] rounded-xl px-3 py-2 shadow-sm text-sm ${m.status === 'failed' ? 'border border-red-300' : ''}">${label}${media}<div class="whitespace-pre-wrap break-words">${esc(m.body || '')}</div><div class="text-[10px] text-slate-400 text-right mt-1">${fmtTime(m.created_at)}${status}</div>${err}</div></div>`;
+}
+function renderMessages() {
+  const el = $('#thread-messages');
+  el.innerHTML = Inbox.messages.map(renderMessage).join('') || '<p class="text-center text-xs text-slate-400">Sem mensagens.</p>';
+  el.scrollTop = el.scrollHeight;
+}
+function renderSide() {
+  const c = Inbox.current; if (!c) return;
+  $('#side-name').value = c.contact?.name || ''; $('#side-phone').textContent = c.contact?.phone || '';
+  $('#side-tags').value = (c.contact?.tags || []).join(', '); $('#side-optout').checked = !!c.contact?.opt_out;
+  $('#side-notes').innerHTML = Inbox.notes.map((n) => `<div class="bg-amber-50 border border-amber-100 rounded-lg p-2"><div class="whitespace-pre-wrap">${esc(n.body)}</div><div class="text-[10px] text-slate-400">${esc(n.author_email || '')} · ${fmtTime(n.created_at)}</div></div>`).join('') || '<p class="text-xs text-slate-400">Nenhuma nota.</p>';
+}
+async function loadTemplatesForComposer() {
+  const sel = $('#composer-template');
+  const accId = Inbox.current?.account_id;
+  const { data } = await sb.from('wa_templates').select('name, language, category, status, components').eq('account_id', accId).order('name');
+  Inbox.templates = (data || []).filter((t) => !t.status || t.status === 'APPROVED');
+  sel.innerHTML = Inbox.templates.length ? Inbox.templates.map((t, i) => `<option value="${i}">${esc(t.name)} (${esc(t.language)})</option>`).join('') : '<option value="">Nenhum template no cache - sincronize na aba Templates</option>';
+}
+
+async function convAction(path, body) {
+  try { const c = await apiFetch(`/api-oficial/conversations/${Inbox.current.id}/${path}`, { method: 'POST', body }); Inbox.current = c; renderThreadHeader(); inboxLoadList(); }
+  catch (e) { toast(e.message, 'error'); }
+}
+$('#th-assign').addEventListener('click', () => convAction('assign', {}));
+$('#th-release').addEventListener('click', () => convAction('release'));
+$('#th-close').addEventListener('click', () => convAction('status', { status: 'closed' }));
+$('#th-reopen').addEventListener('click', () => convAction('status', { status: 'open' }));
+
+async function sendText() {
+  const ta = $('#composer-text'); const text = ta.value.trim(); if (!text || !Inbox.current) return;
+  $('#composer-send').disabled = true;
+  try {
+    const r = await apiFetch(`/api-oficial/conversations/${Inbox.current.id}/send`, { method: 'POST', body: { text } });
+    ta.value = '';
+    if (!Inbox.messages.some((m) => m.id === r.message.id)) { Inbox.messages.push(r.message); renderMessages(); }
+  } catch (e) {
+    if (e.data?.error === 'JANELA_FECHADA') { toast('Janela de 24h fechada: envie um template.', 'error'); Inbox.current.window_expires_at = e.data.window_expires_at; renderThreadHeader(); }
+    else if (e.data?.message_id) { toast('Meta recusou: ' + e.message, 'error'); inboxOpen(Inbox.current.id); }
+    else toast(e.message, 'error');
+  } finally { $('#composer-send').disabled = false; }
+}
+$('#composer-send').addEventListener('click', sendText);
+$('#composer-text').addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); sendText(); } });
+$('#composer-send-template').addEventListener('click', async () => {
+  const t = Inbox.templates[Number($('#composer-template').value)]; if (!t) return toast('Escolha um template', 'error');
+  const components = templateComponentsFromPrompt(t);
+  if (components === null) return;
+  try {
+    const r = await apiFetch(`/api-oficial/conversations/${Inbox.current.id}/send`, { method: 'POST', body: { template: { name: t.name, language: t.language, components } } });
+    if (!Inbox.messages.some((m) => m.id === r.message.id)) { Inbox.messages.push(r.message); renderMessages(); }
+    toast('Template enviado', 'ok');
+  } catch (e) { toast('Meta recusou: ' + e.message, 'error'); }
+});
+// pergunta as variaveis {{n}} do corpo do template (simples: prompt por variavel)
+function templateComponentsFromPrompt(t) {
+  const body = (t.components || []).find((c) => c.type === 'BODY');
+  const n = body ? (body.text.match(/\{\{\d+\}\}/g) || []).length : 0;
+  if (!n) return [];
+  const params = [];
+  for (let i = 1; i <= n; i++) { const v = prompt(`Valor da variavel {{${i}}} do template ${t.name}:`); if (v === null) return null; params.push({ type: 'text', text: v }); }
+  return [{ type: 'body', parameters: params }];
+}
+App.templateComponentsFromPrompt = templateComponentsFromPrompt;
+
+async function saveContact(patch) {
+  try { const c = await apiFetch(`/api-oficial/contacts/${Inbox.current.contact.id}`, { method: 'PATCH', body: patch }); Inbox.current.contact = c; renderThreadHeader(); renderSide(); inboxLoadList(); }
+  catch (e) { toast(e.message, 'error'); }
+}
+$('#side-name').addEventListener('change', (ev) => saveContact({ name: ev.target.value }));
+$('#side-tags').addEventListener('change', (ev) => saveContact({ tags: ev.target.value.split(',').map((x) => x.trim()).filter(Boolean) }));
+$('#side-optout').addEventListener('change', (ev) => saveContact({ opt_out: ev.target.checked }));
+$('#side-note-add').addEventListener('click', async () => {
+  const inp = $('#side-note-text'); const body = inp.value.trim(); if (!body) return;
+  try { const n = await apiFetch(`/api-oficial/conversations/${Inbox.current.id}/notes`, { method: 'POST', body: { body } }); Inbox.notes.push(n); inp.value = ''; renderSide(); }
+  catch (e) { toast(e.message, 'error'); }
+});
+$('#side-note-text').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') $('#side-note-add').click(); });
 
 // ---- boot ----
 (async () => {

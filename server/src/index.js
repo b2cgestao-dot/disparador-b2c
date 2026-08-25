@@ -176,6 +176,66 @@ async function withMeta(reply, fn) {
   }
 }
 
+// ------------------------------------------------------------ [7a] envio (compartilhado)
+const windowOpen = (conv) => !!conv?.window_expires_at && new Date(conv.window_expires_at).getTime() > Date.now();
+function templatePayload(to, tpl) {
+  return {
+    messaging_product: 'whatsapp', recipient_type: 'individual', to, type: 'template',
+    template: { name: tpl.name, language: { code: tpl.language || 'pt_BR' }, ...(Array.isArray(tpl.components) && tpl.components.length ? { components: tpl.components } : {}) },
+  };
+}
+function textPayload(to, text) {
+  return { messaging_product: 'whatsapp', recipient_type: 'individual', to, type: 'text', text: { preview_url: true, body: text } };
+}
+// Envia pela Meta e grava em wa_messages (sucesso ou falha). Retorna { ok, wamid, message, error }.
+async function waSendAndRecord({ account, conversation, contact, kind = 'text', text, template, sentBy = null, isFlow = false, flowId = null }) {
+  const to = onlyDigits(contact.phone);
+  let payload, type, body, templateName = null;
+  if (kind === 'template') {
+    type = 'template'; templateName = template.name;
+    payload = templatePayload(to, template);
+    body = template.preview || `[template: ${template.name}]`;
+  } else {
+    type = 'text'; body = String(text || '');
+    payload = textPayload(to, body);
+  }
+  const row = {
+    conversation_id: conversation.id, account_id: account.id, contact_id: contact.id, direction: 'out', type, body,
+    template_name: templateName, sent_by: sentBy?.id || null, sent_by_email: sentBy?.email || null,
+    is_flow: !!isFlow, flow_id: flowId, payload, status: 'accepted',
+  };
+  try {
+    const res = await metaFetch(account, `${account.phone_number_id}/messages`, { method: 'POST', body: payload });
+    row.wamid = res?.messages?.[0]?.id || null;
+    const { data: saved, error } = await sb.from('wa_messages').insert(row).select('*').single();
+    if (error) throw error;
+    await sb.from('wa_conversations').update({ last_message_at: nowIso(), last_message_preview: body.slice(0, 200), last_direction: 'out' }).eq('id', conversation.id);
+    await sb.from('wa_contacts').update({ last_outbound_at: nowIso() }).eq('id', contact.id);
+    return { ok: true, wamid: row.wamid, message: saved };
+  } catch (e) {
+    if (e instanceof MetaError) {
+      row.status = 'failed'; row.error = { code: e.code, message: e.message, meta: e.meta };
+      const { data: saved } = await sb.from('wa_messages').insert(row).select('*').single();
+      return { ok: false, error: e, message: saved };
+    }
+    throw e;
+  }
+}
+// Garante conversa pro contato SEM mexer na janela (usado em envios ativos/disparo).
+async function ensureConversation(account, contact) {
+  const { data: existing } = await sb.from('wa_conversations').select('*').eq('account_id', account.id).eq('contact_id', contact.id).maybeSingle();
+  if (existing) return existing;
+  const { data, error } = await sb.from('wa_conversations').insert({ account_id: account.id, contact_id: contact.id, status: 'open', unread_count: 0 }).select('*').single();
+  if (error) { if (error.code === '23505') return ensureConversation(account, contact); throw error; }
+  return data;
+}
+async function getConversation(id) {
+  if (!isUuid(id)) return null;
+  const { data, error } = await sb.from('wa_conversations').select('*, contact:wa_contacts(*)').eq('id', id).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 app.register(async function apiOficial(api) {
   api.addHook('preHandler', requireAuth);
 
@@ -282,6 +342,118 @@ app.register(async function apiOficial(api) {
     if (!acc) return httpError(reply, 404, 'CONTA_NAO_ENCONTRADA');
     if (!acc.waba_id) return httpError(reply, 400, 'WABA_ID_OBRIGATORIO');
     return withMeta(reply, async () => ({ apps: (await metaFetch(acc, `${acc.waba_id}/subscribed_apps`))?.data || [] }));
+  });
+
+  // ---- [7] inbox ----
+  const CONV_SELECT = '*, contact:wa_contacts(id,phone,name,tags,opt_out,custom,last_inbound_at), account:whatsapp_api_accounts(id,label,phone_number_id,display_phone)';
+  const withWindow = (c) => ({ ...c, window_open: windowOpen(c) });
+
+  api.get('/conversations', async (req, reply) => {
+    const { status = 'open', assigned = 'all', account_id, search, limit } = req.query;
+    let q = sb.from('wa_conversations').select(CONV_SELECT)
+      .order('last_message_at', { ascending: false, nullsFirst: false }).limit(Math.min(Number(limit) || 200, 500));
+    if (status && status !== 'all') q = q.eq('status', status);
+    if (account_id && isUuid(account_id)) q = q.eq('account_id', account_id);
+    if (assigned === 'me') q = q.eq('assigned_to', req.user.id);
+    else if (assigned === 'unassigned') q = q.is('assigned_to', null);
+    const { data, error } = await q;
+    if (error) return dbFail(reply, error, 'list conversations');
+    let rows = data;
+    if (search) {
+      const sq = String(search).toLowerCase();
+      rows = rows.filter((c) => (c.contact?.phone || '').includes(sq) || (c.contact?.name || '').toLowerCase().includes(sq));
+    }
+    return rows.map(withWindow);
+  });
+
+  api.get('/conversations/:id', async (req, reply) => {
+    const conv = await getConversation(req.params.id);
+    if (!conv) return httpError(reply, 404, 'CONVERSA_NAO_ENCONTRADA');
+    return withWindow(conv);
+  });
+
+  api.get('/conversations/:id/messages', async (req, reply) => {
+    if (!isUuid(req.params.id)) return httpError(reply, 404, 'CONVERSA_NAO_ENCONTRADA');
+    const { data, error } = await sb.from('wa_messages').select('*').eq('conversation_id', req.params.id).order('created_at', { ascending: true }).limit(Math.min(Number(req.query.limit) || 500, 2000));
+    if (error) return dbFail(reply, error, 'list messages');
+    return data;
+  });
+
+  api.get('/conversations/:id/notes', async (req, reply) => {
+    if (!isUuid(req.params.id)) return httpError(reply, 404, 'CONVERSA_NAO_ENCONTRADA');
+    const { data, error } = await sb.from('wa_internal_notes').select('*').eq('conversation_id', req.params.id).order('created_at', { ascending: true });
+    if (error) return dbFail(reply, error, 'list notes');
+    return data;
+  });
+
+  api.post('/conversations/:id/notes', async (req, reply) => {
+    const conv = await getConversation(req.params.id);
+    if (!conv) return httpError(reply, 404, 'CONVERSA_NAO_ENCONTRADA');
+    const body = String(req.body?.body || '').trim();
+    if (!body) return httpError(reply, 400, 'NOTA_VAZIA');
+    const { data, error } = await sb.from('wa_internal_notes').insert({ conversation_id: conv.id, author_id: req.user.id, author_email: req.user.email, body }).select('*').single();
+    if (error) return dbFail(reply, error, 'create note');
+    return reply.code(201).send(data);
+  });
+
+  async function patchConversation(req, reply, patch) {
+    const conv = await getConversation(req.params.id);
+    if (!conv) return httpError(reply, 404, 'CONVERSA_NAO_ENCONTRADA');
+    const { data, error } = await sb.from('wa_conversations').update(typeof patch === 'function' ? patch(conv) : patch).eq('id', conv.id).select(CONV_SELECT).single();
+    if (error) return dbFail(reply, error, 'update conversation');
+    return withWindow(data);
+  }
+  api.post('/conversations/:id/assign', async (req, reply) => {
+    const uid = req.body?.user_id || req.user.id; const email = req.body?.email || (uid === req.user.id ? req.user.email : null);
+    return patchConversation(req, reply, { assigned_to: uid, assigned_email: email, assigned_at: nowIso() });
+  });
+  api.post('/conversations/:id/release', async (req, reply) => patchConversation(req, reply, { assigned_to: null, assigned_email: null, assigned_at: null }));
+  api.post('/conversations/:id/read', async (req, reply) => patchConversation(req, reply, { unread_count: 0 }));
+  api.post('/conversations/:id/status', async (req, reply) => {
+    const status = req.body?.status;
+    if (!['open', 'closed'].includes(status)) return httpError(reply, 400, 'STATUS_INVALIDO', { permitidos: ['open', 'closed'] });
+    return patchConversation(req, reply, status === 'closed' ? { status, closed_at: nowIso(), closed_by: req.user.id } : { status, closed_at: null, closed_by: null });
+  });
+
+  // Enviar: texto livre so DENTRO da janela de 24h (anti-bug #12); template sempre.
+  api.post('/conversations/:id/send', async (req, reply) => {
+    const conv = await getConversation(req.params.id);
+    if (!conv) return httpError(reply, 404, 'CONVERSA_NAO_ENCONTRADA');
+    const account = await getAccount(conv.account_id);
+    if (!account) return httpError(reply, 404, 'CONTA_NAO_ENCONTRADA');
+    const contact = conv.contact;
+    const b = req.body || {};
+    let result;
+    try {
+      if (b.template?.name) {
+        result = await waSendAndRecord({ account, conversation: conv, contact, kind: 'template', template: b.template, sentBy: req.user });
+      } else {
+        const text = String(b.text || '').trim();
+        if (!text) return httpError(reply, 400, 'TEXTO_OBRIGATORIO');
+        if (!windowOpen(conv)) return reply.code(409).send({ error: 'JANELA_FECHADA', window_expires_at: conv.window_expires_at, detail: 'Fora da janela de 24h so e permitido enviar template.' });
+        result = await waSendAndRecord({ account, conversation: conv, contact, kind: 'text', text, sentBy: req.user });
+      }
+    } catch (e) {
+      app.log.error({ err: e }, 'send failed');
+      return reply.code(502).send(metaErrorPayload(e));
+    }
+    if (!result.ok) return reply.code(502).send({ ...metaErrorPayload(result.error), message_id: result.message?.id });
+    return { ok: true, wamid: result.wamid, message: result.message };
+  });
+
+  api.patch('/contacts/:id', async (req, reply) => {
+    if (!isUuid(req.params.id)) return httpError(reply, 404, 'CONTATO_NAO_ENCONTRADO');
+    const b = req.body || {};
+    const patch = {};
+    if (typeof b.name === 'string') patch.name = b.name.trim() || null;
+    if (Array.isArray(b.tags)) patch.tags = [...new Set(b.tags.map((t) => String(t).trim()).filter(Boolean))];
+    if (typeof b.opt_out === 'boolean') patch.opt_out = b.opt_out;
+    if (b.custom && typeof b.custom === 'object') patch.custom = b.custom;
+    if (!Object.keys(patch).length) return httpError(reply, 400, 'NADA_PARA_ATUALIZAR');
+    const { data, error } = await sb.from('wa_contacts').update(patch).eq('id', req.params.id).select('*').maybeSingle();
+    if (error) return dbFail(reply, error, 'update contact');
+    if (!data) return httpError(reply, 404, 'CONTATO_NAO_ENCONTRADO');
+    return data;
   });
 
   // >>> [api-oficial] proximas rotas (inbox, templates, disparo, fluxos) entram aqui

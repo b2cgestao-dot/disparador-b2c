@@ -11,8 +11,8 @@ STATUS: TODO | IN_PROGRESS | DONE | BLOCKED
 
 ## Estado atual
 
-- Tarefa em foco: T6 (inbox multiagente)
-- Ultima stack verde: 2026-08-25 17:15 (`./verify.sh t5` = 0)
+- Tarefa em foco: T7 (templates)
+- Ultima stack verde: 2026-08-25 17:50 (`./verify.sh t6` = 0)
 
 ## Log
 
@@ -22,8 +22,8 @@ STATUS: TODO | IN_PROGRESS | DONE | BLOCKED
 - T3  | DONE | 2026-08-25 16:45 | web/index.html (1 arquivo, Tailwind+supabase-js via CDN): login Supabase Auth, menu lateral data-view, views inicio/apioficial/config, abas contas/inbox/templates/disparo/fluxos/relatorio, App.api() com JWT, API_URL='/api' (backend faz rewriteUrl tirando /api). Backend serve web/ em `/` localmente. test/t3_front.test.js roda em Chrome headless real via CDP (test/browser.mjs, WebSocket nativo do Node 22, zero deps): 8 testes verdes.
 - T4  | DONE | 2026-08-25 17:02 | /api-oficial/accounts CRUD (+/test, /register, /subscribe, /subscribed-apps) com requireAuth; publicAccount() remove access_token/app_secret e expoe has_*; PATCH com segredo vazio mantem o atual; erros da Meta viram 502 META_ERROR {code,message}. Front: aba Contas (tabela, dialog de conta, dialog de PIN, badges). 14 testes verdes (11 API + 3 no Chrome).
 - T5  | DONE | 2026-08-25 17:15 | GET /whatsapp/webhook (verify_token de qualquer conta -> ecoa challenge); POST valida X-Hub-Signature-256 sobre rawBody (timingSafeEqual), acha conta por phone_number_id, grava wa_webhook_events (mesmo invalido), upsert contato, abre/reabre conversa (+unread, janela +24h), insere wa_messages (dedup por wamid), baixa midia da Meta pro bucket wa-media (URL publica via SUPABASE_PUBLIC_URL), status delivered/read/failed atualiza wa_messages e whatsapp_api_sends (nao rebaixa status). Gancho waOnInbound pros fluxos (T9). 9 testes verdes.
-- T6  | IN_PROGRESS | 2026-08-25 17:16 | Inbox: endpoints de conversas + front 3 colunas + Realtime.
-- T7  | TODO | -            | -
+- T6  | DONE | 2026-08-25 17:50 | /api-oficial/conversations (lista c/ contato+conta, filtros status/assigned/account/search), /:id, /:id/messages, /:id/notes (GET/POST), /:id/(assign|release|read|status|send), PATCH /contacts/:id. waSendAndRecord() compartilhado (texto/template, grava sucesso ou falha em wa_messages, atualiza conversa/contato). Texto fora da janela -> 409 JANELA_FECHADA; template sempre pode. Front: inbox 3 colunas (lista com filtros, thread com bolhas in/out/fluxo/midia/status, composer que troca pra template quando a janela fecha, lateral com contato/tags/opt-out/notas), Realtime em wa_messages e wa_conversations. 14 testes verdes (9 API incl. Realtime em Node + 5 no Chrome).
+- T7  | IN_PROGRESS | 2026-08-25 17:51 | Templates: sync/listar/criar (+ cabecalho de midia via upload resumable) e cache em wa_templates.
 - T8  | TODO | -            | -
 - T9  | TODO | -            | -
 - T10 | BLOCKED | -         | Deploy real aguarda VPS + dominio + DNS do dono.
@@ -38,6 +38,14 @@ STATUS: TODO | IN_PROGRESS | DONE | BLOCKED
   dono colocar o blueprint na pasta, reconciliar nomes de colunas/telas com ele.
 
 ## Notas de tentativas (bugs encontrados e como resolvi)
+
+- T6 | `node --test` ficou pendurado (>400s): o cliente Realtime do supabase-js
+  mantem o event loop vivo. Solucao: no teste, `removeChannel` +
+  `realtime.disconnect()` + um `after()` com `process.exit` agendado (unref).
+  macOS nao tem `timeout`; use `perl -e 'alarm N; exec @ARGV' N cmd` como watchdog.
+- T6 | CDP `Runtime.evaluate` com returnByValue falha ("Object reference chain
+  is too long") se a expressao retorna um objeto circular (ex.: canal
+  Realtime). Sempre retornar booleanos/JSON simples nos `page.waitFor`.
 
 - T3 | Testar front sem framework: usei Chrome headless (ja instalado na
   maquina) via Chrome DevTools Protocol com o WebSocket nativo do Node 22

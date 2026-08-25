@@ -114,7 +114,7 @@ Aceitacao:
 
 ---
 
-## [~] T6 - Inbox multiagente
+## [x] T6 - Inbox multiagente
 
 Entrega: leitura de conversas/mensagens/notas (front le direto do Supabase +
 Realtime), e acoes via backend: enviar (com janela 24h), atribuir, liberar,
@@ -124,17 +124,17 @@ Endpoints: `GET /api-oficial/conversations(/:id/messages|/notes)`,
 `POST /api-oficial/conversations/:id/(send|assign|release|read|status|notes)`.
 
 Aceitacao:
-- [ ] Enviar mensagem DENTRO da janela de 24h grava outbound e chama o envio no
+- [x] Enviar mensagem DENTRO da janela de 24h grava outbound e chama o envio no
       mock-meta.
-- [ ] Enviar FORA da janela retorna `JANELA_FECHADA` e nao envia texto livre.
-- [ ] Atribuir/liberar/marcar lida/fechar alteram o estado da conversa.
-- [ ] Nota interna e gravada em `wa_internal_notes`.
-- [ ] Uma nova mensagem inbound (via mock) aparece no Realtime (teste
+- [x] Enviar FORA da janela retorna `JANELA_FECHADA` e nao envia texto livre.
+- [x] Atribuir/liberar/marcar lida/fechar alteram o estado da conversa.
+- [x] Nota interna e gravada em `wa_internal_notes`.
+- [x] Uma nova mensagem inbound (via mock) aparece no Realtime (teste
       subscreve e recebe o evento).
 
 ---
 
-## [ ] T7 - Templates
+## [~] T7 - Templates
 
 Entrega: listar/sincronizar templates da Meta (mock) e criar novos, com cache em
 `wa_templates`. Cabecalho de midia via upload (mock retorna `header_handle`).
