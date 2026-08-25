@@ -11,14 +11,14 @@ STATUS: TODO | IN_PROGRESS | DONE | BLOCKED
 
 ## Estado atual
 
-- Tarefa em foco: T1 (banco / schema idempotente)
-- Ultima stack verde: 2026-08-25 16:20 (`./verify.sh smoke` = 0)
+- Tarefa em foco: T2 (backend esqueleto)
+- Ultima stack verde: 2026-08-25 16:28 (`./verify.sh t1` = 0)
 
 ## Log
 
 - T0  | DONE | 2026-08-25 16:20 | Harness completo: colima+docker+compose instalados via brew; supabase local (6 containers, sem studio/analytics/etc); mock-meta (:4000) emulando Graph + /_simulate/inbound assinado; backend esqueleto (:3000, rawBody, 50MB, auth, metaFetch); schema.sql completo; seed (teste@disparador.local / Teste123! + conta PNID-TEST-0001); verify.sh (smoke|tN|all|up|down, --down). `./verify.sh smoke` verde.
-- T1  | IN_PROGRESS | 2026-08-25 16:21 | schema.sql ja escrito na T0; falta o teste t1 (idempotencia, colunas, publication, bucket).
-- T2  | TODO | -            | -
+- T1  | DONE | 2026-08-25 16:28 | db/schema.sql idempotente (9 tabelas, RLS select authenticated, grants explicitos, colunas secretas da conta ocultas de authenticated, publication realtime, bucket wa-media publico). test/t1_schema.test.js verde (6 testes).
+- T2  | IN_PROGRESS | 2026-08-25 16:29 | Esqueleto ja existe desde T0; escrevendo test/t2_backend.test.js.
 - T3  | TODO | -            | -
 - T4  | TODO | -            | -
 - T5  | TODO | -            | -

@@ -30,7 +30,7 @@ Aceitacao:
 
 ---
 
-## [~] T1 - Banco (schema idempotente)
+## [x] T1 - Banco (schema idempotente)
 
 Entrega: `db/schema.sql` com todas as tabelas do blueprint secao 5
 (`whatsapp_api_accounts`, `whatsapp_api_sends`, `wa_contacts`,
@@ -39,14 +39,14 @@ Entrega: `db/schema.sql` com todas as tabelas do blueprint secao 5
 `wa_*` na publication `supabase_realtime`, bucket `wa-media`.
 
 Aceitacao:
-- [ ] Rodar o `schema.sql` duas vezes seguidas nao gera erro (idempotencia).
-- [ ] Todas as 9 tabelas existem com as colunas do blueprint.
-- [ ] As tabelas `wa_*` estao na publication `supabase_realtime`.
-- [ ] O bucket `wa-media` existe.
+- [x] Rodar o `schema.sql` duas vezes seguidas nao gera erro (idempotencia).
+- [x] Todas as 9 tabelas existem com as colunas do blueprint.
+- [x] As tabelas `wa_*` estao na publication `supabase_realtime`.
+- [x] O bucket `wa-media` existe.
 
 ---
 
-## [ ] T2 - Backend esqueleto (Fastify)
+## [~] T2 - Backend esqueleto (Fastify)
 
 Entrega: `server/src/index.js` na porta 3000, CORS, parser que preserva
 `rawBody`, `bodyLimit` 50 MB, cliente Supabase com service key, leitura de

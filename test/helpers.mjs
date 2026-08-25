@@ -98,3 +98,27 @@ export async function waitFor(fn, { timeout = 5000, interval = 100, label = 'con
   }
   throw new Error(`timeout (${timeout}ms) esperando ${label}: ${last instanceof Error ? last.message : JSON.stringify(last)}`);
 }
+
+// --- acesso direto ao Postgres local (introspeccao de schema nos testes) ---
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+function dbContainer() {
+  const toml = fs.readFileSync(path.resolve(process.cwd(), 'supabase/config.toml'), 'utf8');
+  const m = toml.match(/^project_id\s*=\s*"([^"]+)"/m);
+  return `supabase_db_${m ? m[1] : 'default'}`;
+}
+function dockerEnv() {
+  const env = { ...process.env };
+  const sock = path.join(os.homedir(), '.colima/default/docker.sock');
+  if (!env.DOCKER_HOST && !fs.existsSync('/var/run/docker.sock') && fs.existsSync(sock)) env.DOCKER_HOST = `unix://${sock}`;
+  return env;
+}
+// roda SQL como postgres; retorna stdout (formato -At: uma linha por row, colunas separadas por |)
+export function psql(sql, { file } = {}) {
+  const args = ['exec', '-i', dbContainer(), 'psql', '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-At', '-q'];
+  if (file) args.push('-f', '-');
+  else args.push('-c', sql);
+  return execFileSync('docker', args, { env: dockerEnv(), input: file ? fs.readFileSync(file) : undefined, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+}
