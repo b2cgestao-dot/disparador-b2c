@@ -1,0 +1,38 @@
+# ============================================================================
+# Caddy (producao): HTTPS automatico (Let's Encrypt), front estatico + proxy da API.
+# [PLUG-KEY] Troque painel.exemplo.com.br pelo seu dominio (registro A -> IP da VPS).
+#            Antes do DNS estar pronto, use ":80" no lugar do dominio pra testar sem TLS.
+# ============================================================================
+painel.exemplo.com.br {
+	encode gzip zstd
+
+	# Backend: API do painel (o backend remove o prefixo /api), webhook da Meta e health
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+	handle /whatsapp/* {
+		reverse_proxy api:3000
+	}
+	handle /health {
+		reverse_proxy api:3000
+	}
+
+	# Front = 1 arquivo (web/index.html). SEM cache na raiz "/" e no index.html
+	# (anti-bug #8: no-cache tem que cobrir a raiz, nao so /index.html)
+	handle {
+		root * /srv/web
+		header / Cache-Control "no-cache, no-store, must-revalidate"
+		header /index.html Cache-Control "no-cache, no-store, must-revalidate"
+		header Cache-Control "no-cache, no-store, must-revalidate"
+		header X-Content-Type-Options nosniff
+		header X-Frame-Options DENY
+		header Referrer-Policy strict-origin-when-cross-origin
+		try_files {path} /index.html
+		file_server
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

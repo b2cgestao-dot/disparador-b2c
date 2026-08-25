@@ -109,7 +109,7 @@ function dbContainer() {
   const m = toml.match(/^project_id\s*=\s*"([^"]+)"/m);
   return `supabase_db_${m ? m[1] : 'default'}`;
 }
-function dockerEnv() {
+export function dockerEnv() {
   const env = { ...process.env };
   const sock = path.join(os.homedir(), '.colima/default/docker.sock');
   if (!env.DOCKER_HOST && !fs.existsSync('/var/run/docker.sock') && fs.existsSync(sock)) env.DOCKER_HOST = `unix://${sock}`;

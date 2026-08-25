@@ -30,6 +30,26 @@ Trocar `META_BASE_URL` de `http://mock-meta:4000` para
 - [ ] Inscrever o app na WABA (`subscribed_apps`) - o passo que destrava tudo
 - [ ] URL de Politica de Privacidade publica (pra sair do modo de teste)
 
+## Onde cada chave entra (marcadores `[PLUG-KEY]` no codigo)
+
+| Arquivo | O que trocar |
+| --- | --- |
+| `web/index.html` (topo do `<script>`) | `SUPABASE_URL` e `SUPABASE_ANON_KEY` do projeto de producao. `API_URL` fica `/api`. |
+| `.env` (a partir de `.env.example`) | `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` (service_role), `META_BASE_URL=https://graph.facebook.com`, `META_API_VERSION`. |
+| `server/src/index.js` | Nada a editar: le `META_BASE_URL` do ambiente (mock em dev, Graph real em producao). |
+| `docker-compose.prod.yml` | `META_BASE_URL` vem do `.env` (default ja e graph.facebook.com). |
+| `Caddyfile` | Trocar `painel.exemplo.com.br` pelo dominio real. |
+| `db/seed.mjs` | SOMENTE local (usuario/conta de teste). NAO rodar em producao; a conta real e cadastrada na tela de Contas. |
+| Tela **Contas** (no painel) | Phone Number ID, WABA ID, App ID, Access Token, App Secret, Verify Token, PIN (botao Registrar). |
+
+## Ordem sugerida pra ir de mock -> producao
+
+1. Supabase: criar projeto, rodar `db/schema.sql`, criar usuarios (Auth).
+2. `web/index.html`: colar URL + anon key. `.env`: colar URL + service_role + `META_BASE_URL=https://graph.facebook.com`.
+3. VPS + dominio: seguir `DEPLOY.md` (scp + `docker compose -f docker-compose.prod.yml up -d --build`).
+4. Meta: cadastrar a conta na tela de Contas -> Testar -> Registrar (PIN) -> Inscrever app; cadastrar webhook `https://<dominio>/whatsapp/webhook` + verify token e assinar `messages`.
+5. Templates -> Sincronizar; disparo de teste; responder do celular e conferir o Inbox.
+
 ## VPS + dominio (Tarefa T10, BLOCKED)
 
 - [ ] Contratar VPS (1-2 GB) e pegar o IP publico

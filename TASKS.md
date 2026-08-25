@@ -201,14 +201,14 @@ unless-stopped), `Caddyfile` (static + proxy `/api/*` + no-cache na raiz `/`),
 `DEPLOY.md` (runbook scp + `docker compose up -d --build`).
 
 Aceitacao:
-- [ ] Os quatro artefatos existem e passam num lint/checagem basica de sintaxe.
-- [ ] O `Caddyfile` tem `no-cache` cobrindo a raiz `/`.
-- [ ] Marcado `BLOCKED` ate o dono ter VPS + dominio + DNS. Registrar isso em
+- [x] Os quatro artefatos existem e passam num lint/checagem basica de sintaxe.
+- [x] O `Caddyfile` tem `no-cache` cobrindo a raiz `/`.
+- [x] Marcado `BLOCKED` ate o dono ter VPS + dominio + DNS. Registrar isso em
       `CREDENTIALS-TODO.md`.
 
 ---
 
-## [ ] T11 - Relatorio final
+## [~] T11 - Relatorio final
 
 Entrega: `RELATORIO-FINAL.md` conforme secao 9 do CLAUDE.md. Commit final. PARE.
 

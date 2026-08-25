@@ -11,8 +11,8 @@ STATUS: TODO | IN_PROGRESS | DONE | BLOCKED
 
 ## Estado atual
 
-- Tarefa em foco: T10 (artefatos de deploy)
-- Ultima stack verde: 2026-08-25 19:05 (`./verify.sh t9` = 0)
+- Tarefa em foco: T11 (relatorio final)
+- Ultima stack verde: 2026-08-25 19:15 (`./verify.sh t10` = 0)
 
 ## Log
 
@@ -26,8 +26,8 @@ STATUS: TODO | IN_PROGRESS | DONE | BLOCKED
 - T7  | DONE | 2026-08-25 18:05 | GET /accounts/:id/templates (ao vivo, paginado), POST /sync-templates (upsert em wa_templates por account+name+language, remove os que sumiram), GET /templates-cache, POST /templates (valida nome/idioma/categoria/BODY; header_media base64 -> Storage wa-media/templates/... -> upload resumable na Meta (POST /{app_id}/uploads + POST /{upload_id} com Authorization: OAuth) -> header_handle no HEADER -> POST message_templates -> cache). Front: aba Templates (select de conta, Sincronizar, tabela com resumo, dialog de novo template com cabecalho texto/midia, corpo, rodape, ate 3 quick replies + URL). App.templateOptions(accountId) alimenta o composer do inbox (e o disparo na T8). 9 testes verdes.
 - T8  | DONE | 2026-08-25 18:35 | POST /broadcast -> 202 {job_id,total,invalid,duplicates} na hora; runBroadcast() nao-awaited (rate 1-50 msg/s); GET /broadcast(/:jobId), POST /:jobId/cancel; GET /sends-report {summary, rows[].help{code,motivo,fix}} com WA_ERROR_HELP (~55 codigos em PT). CSV: aspas, "" escapado, CRLF, BOM, separador , ou ;, cabecalho = 1a linha com letras. Telefone <10 digitos descartado, 10-11 digitos ganha 55, dedup. Nome da lista vira tag no contato; opt_out pulado (skipped + skip_reason); variaveis {{n}} do BODY (e HEADER texto) vem das colunas apos o telefone. Cada envio vira wa_messages out (template_name) + whatsapp_api_sends. Front: aba Disparo (previa validos/invalidos/duplicados, template do cache, progresso por polling, cancelar) e aba Relatorio (filtros, motivo + fix em PT). 11 testes verdes.
 - T9  | DONE | 2026-08-25 19:05 | Motor: waOnInbound (gancho do webhook) -> waFindFlows (trigger_text normalizado sem acento/caixa; conta especifica + globais) -> waRunFlow (passos em ordem, delay_s) -> waSendFlowStep (texto com {{nome}}/{{telefone}} via waSendAndRecord is_flow=true; texto fora da janela vira wa_messages failed JANELA_FECHADA; passo template sempre envia) -> waApplyActions (add_tag/remove_tag/opt_out/opt_in/close). So botao (type button / interactive.button_reply) dispara; botao URL/PHONE_NUMBER do template de origem (via context.id) e ignorado; texto digitado so com match_text=true. CRUD /api-oficial/flows com validacao. Front: aba Fluxos (tabela, dialog com passos dinamicos: delay, texto, template opcional, acoes). 10 testes verdes.
-- T10 | BLOCKED | -         | Deploy real aguarda VPS + dominio + DNS do dono.
-- T11 | TODO | -            | -
+- T10 | BLOCKED | 2026-08-25 19:15 | Artefatos PRONTOS e validados (server/Dockerfile node:22-alpine, docker-compose.prod.yml api+caddy com healthcheck/restart, Caddyfile com no-cache na raiz / + proxy /api/* /whatsapp/* /health, DEPLOY.md runbook scp + compose up -d --build + checklist go-live). `docker compose config` e `caddy validate` passam (7 testes verdes). Deploy real BLOCKED: aguardando VPS + dominio + DNS do dono (CREDENTIALS-TODO.md).
+- T11 | IN_PROGRESS | 2026-08-25 19:16 | RELATORIO-FINAL.md + ./verify.sh all + commit final.
 
 ## Blockers abertos
 

@@ -1,0 +1,60 @@
+# ============================================================================
+# PRODUCAO (VPS): backend (api) + Caddy (HTTPS automatico, front estatico, proxy)
+#   docker compose -f docker-compose.prod.yml up -d --build
+# Precisa de um .env ao lado com: SUPABASE_URL, SUPABASE_SERVICE_KEY,
+#   META_BASE_URL=https://graph.facebook.com, META_API_VERSION=v21.0
+# O front e o web/index.html servido pelo Caddy (copiar 1 arquivo = deploy do front).
+# ============================================================================
+services:
+  api:
+    build: ./server
+    container_name: disparador-api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      WEB_DIR: /app/web
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      # [PLUG-KEY] em producao aponte pra Graph real (definido no .env):
+      META_BASE_URL: ${META_BASE_URL:-https://graph.facebook.com}
+      META_API_VERSION: ${META_API_VERSION:-v21.0}
+    volumes:
+      - ./web:/app/web:ro
+    expose:
+      - "3000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+    networks: [web]
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: disparador-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./web:/srv/web:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [web]
+
+volumes:
+  caddy_data: {}
+  caddy_config: {}
+
+networks:
+  web: {}
