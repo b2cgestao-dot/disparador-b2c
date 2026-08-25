@@ -145,6 +145,148 @@ if (DEBUG_ROUTES) {
   });
 }
 
+// ----------------------------------------------------------------- [5] contas
+const ACCOUNT_FIELDS = ['label', 'phone_number_id', 'waba_id', 'app_id', 'access_token', 'app_secret', 'verify_token', 'display_phone', 'active'];
+const isUuid = (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v || ''));
+const pick = (obj, keys) => Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
+
+async function getAccount(id) {
+  if (!isUuid(id)) return null;
+  const { data, error } = await sb.from('whatsapp_api_accounts').select('*').eq('id', id).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+async function getAccountByPnid(pnid) {
+  const { data, error } = await sb.from('whatsapp_api_accounts').select('*').eq('phone_number_id', String(pnid)).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+async function updateAccount(id, patch) {
+  const { data, error } = await sb.from('whatsapp_api_accounts').update(patch).eq('id', id).select('*').maybeSingle();
+  if (error) throw error;
+  return data;
+}
+// Executa uma chamada a Meta em nome de uma conta; erros viram 502 com detalhe.
+async function withMeta(reply, fn) {
+  try { return await fn(); }
+  catch (e) {
+    if (e instanceof MetaError) return reply.code(502).send(metaErrorPayload(e));
+    app.log.error({ err: e }, 'meta unreachable');
+    return reply.code(502).send(metaErrorPayload(e));
+  }
+}
+
+app.register(async function apiOficial(api) {
+  api.addHook('preHandler', requireAuth);
+
+  // ---- CRUD de contas ----
+  api.get('/accounts', async (req, reply) => {
+    const { data, error } = await sb.from('whatsapp_api_accounts').select('*').order('created_at', { ascending: true });
+    if (error) return dbFail(reply, error, 'list accounts');
+    return data.map(publicAccount);
+  });
+
+  api.post('/accounts', async (req, reply) => {
+    const row = pick(req.body || {}, ACCOUNT_FIELDS);
+    for (const k of Object.keys(row)) if (typeof row[k] === 'string') row[k] = row[k].trim();
+    if (!row.label || !row.phone_number_id) return httpError(reply, 400, 'CAMPOS_OBRIGATORIOS', { campos: ['label', 'phone_number_id'] });
+    if (row.active === undefined) row.active = true;
+    const { data, error } = await sb.from('whatsapp_api_accounts').insert(row).select('*').single();
+    if (error) {
+      if (error.code === '23505') return httpError(reply, 409, 'PHONE_NUMBER_ID_JA_CADASTRADO');
+      return dbFail(reply, error, 'create account');
+    }
+    return reply.code(201).send(publicAccount(data));
+  });
+
+  api.get('/accounts/:id', async (req, reply) => {
+    const acc = await getAccount(req.params.id);
+    if (!acc) return httpError(reply, 404, 'CONTA_NAO_ENCONTRADA');
+    return publicAccount(acc);
+  });
+
+  api.patch('/accounts/:id', async (req, reply) => {
+    const acc = await getAccount(req.params.id);
+    if (!acc) return httpError(reply, 404, 'CONTA_NAO_ENCONTRADA');
+    const patch = pick(req.body || {}, ACCOUNT_FIELDS);
+    for (const k of Object.keys(patch)) if (typeof patch[k] === 'string') patch[k] = patch[k].trim();
+    // segredo vazio no PATCH = manter o atual
+    for (const f of SECRET_FIELDS) if (patch[f] === '' || patch[f] === null) delete patch[f];
+    if (patch.label === '') delete patch.label;
+    if (patch.phone_number_id === '') delete patch.phone_number_id;
+    if (!Object.keys(patch).length) return httpError(reply, 400, 'NADA_PARA_ATUALIZAR');
+    try {
+      const data = await updateAccount(acc.id, patch);
+      return publicAccount(data);
+    } catch (error) {
+      if (error.code === '23505') return httpError(reply, 409, 'PHONE_NUMBER_ID_JA_CADASTRADO');
+      return dbFail(reply, error, 'update account');
+    }
+  });
+
+  api.delete('/accounts/:id', async (req, reply) => {
+    const acc = await getAccount(req.params.id);
+    if (!acc) return httpError(reply, 404, 'CONTA_NAO_ENCONTRADA');
+    const { error } = await sb.from('whatsapp_api_accounts').delete().eq('id', acc.id);
+    if (error) return dbFail(reply, error, 'delete account');
+    return { ok: true, id: acc.id };
+  });
+
+  // ---- Testar: GET {META_BASE_URL}/{phone_number_id} ----
+  api.post('/accounts/:id/test', async (req, reply) => {
+    const acc = await getAccount(req.params.id);
+    if (!acc) return httpError(reply, 404, 'CONTA_NAO_ENCONTRADA');
+    try {
+      const info = await metaFetch(acc, acc.phone_number_id, { query: { fields: 'id,verified_name,display_phone_number,quality_rating,code_verification_status,name_status' } });
+      await updateAccount(acc.id, {
+        verified_name: info.verified_name || null,
+        display_phone: info.display_phone_number || acc.display_phone,
+        quality_rating: info.quality_rating || null,
+        last_test_at: nowIso(), last_test_ok: true,
+      });
+      return { ok: true, ...info };
+    } catch (e) {
+      await updateAccount(acc.id, { last_test_at: nowIso(), last_test_ok: false }).catch(() => {});
+      return reply.code(502).send({ ok: false, ...metaErrorPayload(e) });
+    }
+  });
+
+  // ---- Registrar: POST {pnid}/register com PIN (anti-bug #10) ----
+  api.post('/accounts/:id/register', async (req, reply) => {
+    const acc = await getAccount(req.params.id);
+    if (!acc) return httpError(reply, 404, 'CONTA_NAO_ENCONTRADA');
+    const pin = onlyDigits(req.body?.pin);
+    if (pin.length !== 6) return httpError(reply, 400, 'PIN_INVALIDO', { detail: 'PIN deve ter 6 digitos' });
+    return withMeta(reply, async () => {
+      const result = await metaFetch(acc, `${acc.phone_number_id}/register`, { method: 'POST', body: { messaging_product: 'whatsapp', pin } });
+      await updateAccount(acc.id, { registered: true });
+      return { ok: true, result };
+    });
+  });
+
+  // ---- Inscrever app: POST {waba}/subscribed_apps (anti-bug #11) ----
+  api.post('/accounts/:id/subscribe', async (req, reply) => {
+    const acc = await getAccount(req.params.id);
+    if (!acc) return httpError(reply, 404, 'CONTA_NAO_ENCONTRADA');
+    if (!acc.waba_id) return httpError(reply, 400, 'WABA_ID_OBRIGATORIO');
+    return withMeta(reply, async () => {
+      const result = await metaFetch(acc, `${acc.waba_id}/subscribed_apps`, { method: 'POST', body: {} });
+      const list = await metaFetch(acc, `${acc.waba_id}/subscribed_apps`);
+      const apps = list?.data || [];
+      await updateAccount(acc.id, { subscribed: apps.length > 0 });
+      return { ok: true, result, apps };
+    });
+  });
+  api.get('/accounts/:id/subscribed-apps', async (req, reply) => {
+    const acc = await getAccount(req.params.id);
+    if (!acc) return httpError(reply, 404, 'CONTA_NAO_ENCONTRADA');
+    if (!acc.waba_id) return httpError(reply, 400, 'WABA_ID_OBRIGATORIO');
+    return withMeta(reply, async () => ({ apps: (await metaFetch(acc, `${acc.waba_id}/subscribed_apps`))?.data || [] }));
+  });
+
+  // >>> [api-oficial] proximas rotas (inbox, templates, disparo, fluxos) entram aqui
+}, { prefix: '/api-oficial' });
+
 // ------------------------------------------------------------ [11] static web
 // Em producao o Caddy serve o web/index.html; localmente o backend serve pra facilitar.
 function serveIndex(req, reply) {

@@ -99,7 +99,20 @@
           </div>
         </div>
         <div class="flex-1 min-h-0 overflow-auto">
-          <div data-tab-panel="contas" class="p-6"><p class="text-sm text-slate-500">Contas: em construcao (T4).</p></div>
+          <div data-tab-panel="contas" class="p-6 space-y-4">
+            <div class="flex items-center justify-between">
+              <p class="text-sm text-slate-600">Contas da WhatsApp Cloud API. Tokens ficam no servidor e nunca aparecem aqui.</p>
+              <button id="acc-new" class="bg-green-600 hover:bg-green-700 text-white text-sm rounded-lg px-3 py-2">+ Nova conta</button>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead class="bg-slate-50 text-slate-500 text-left text-xs uppercase">
+                  <tr><th class="px-4 py-2">Conta</th><th class="px-4 py-2">Phone Number ID</th><th class="px-4 py-2">WABA ID</th><th class="px-4 py-2">Status</th><th class="px-4 py-2 text-right">Acoes</th></tr>
+                </thead>
+                <tbody id="acc-rows"><tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">carregando...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
           <div data-tab-panel="inbox" class="h-full" hidden><p class="p-6 text-sm text-slate-500">Inbox: em construcao (T6).</p></div>
           <div data-tab-panel="templates" class="p-6" hidden><p class="text-sm text-slate-500">Templates: em construcao (T7).</p></div>
           <div data-tab-panel="disparo" class="p-6" hidden><p class="text-sm text-slate-500">Disparo: em construcao (T8).</p></div>
@@ -131,6 +144,43 @@
 </div>
 
 <div id="toast" class="fixed bottom-4 right-4 bg-slate-900 text-white text-sm px-4 py-2 rounded-lg shadow-lg" hidden></div>
+
+<!-- dialog: conta -->
+<dialog id="acc-dialog" class="rounded-2xl p-0 w-full max-w-lg shadow-xl backdrop:bg-black/40">
+  <form id="acc-form" method="dialog" class="p-6 space-y-3 text-sm">
+    <h3 id="acc-form-title" class="font-semibold text-base">Nova conta</h3>
+    <input type="hidden" name="id" />
+    <label class="block">Nome (label) *<input name="label" required class="mt-1 w-full border rounded-lg px-3 py-2" placeholder="Ex.: Comercial SP" /></label>
+    <div class="grid grid-cols-2 gap-3">
+      <label class="block">Phone Number ID *<input name="phone_number_id" required class="mt-1 w-full border rounded-lg px-3 py-2 font-mono text-xs" placeholder="1234567890" /></label>
+      <label class="block">WABA ID<input name="waba_id" class="mt-1 w-full border rounded-lg px-3 py-2 font-mono text-xs" /></label>
+      <label class="block">App ID<input name="app_id" class="mt-1 w-full border rounded-lg px-3 py-2 font-mono text-xs" /></label>
+      <label class="block">Telefone (exibicao)<input name="display_phone" class="mt-1 w-full border rounded-lg px-3 py-2" placeholder="+55 11 99999-9999" /></label>
+    </div>
+    <label class="block">Access Token (token de sistema) <span class="text-slate-400" data-secret-hint hidden>- deixe vazio pra manter</span><input name="access_token" type="password" autocomplete="off" class="mt-1 w-full border rounded-lg px-3 py-2 font-mono text-xs" /></label>
+    <div class="grid grid-cols-2 gap-3">
+      <label class="block">App Secret <span class="text-slate-400" data-secret-hint hidden>- vazio = manter</span><input name="app_secret" type="password" autocomplete="off" class="mt-1 w-full border rounded-lg px-3 py-2 font-mono text-xs" /></label>
+      <label class="block">Verify Token (webhook)<input name="verify_token" class="mt-1 w-full border rounded-lg px-3 py-2 font-mono text-xs" /></label>
+    </div>
+    <label class="flex items-center gap-2"><input name="active" type="checkbox" checked /> Conta ativa</label>
+    <p id="acc-form-error" class="text-red-600" hidden></p>
+    <div class="flex justify-end gap-2 pt-2">
+      <button type="button" id="acc-cancel" class="px-3 py-2 rounded-lg border">Cancelar</button>
+      <button type="submit" id="acc-save" class="px-3 py-2 rounded-lg bg-green-600 text-white">Salvar</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- dialog: PIN de registro -->
+<dialog id="pin-dialog" class="rounded-2xl p-0 w-full max-w-xs shadow-xl backdrop:bg-black/40">
+  <form id="pin-form" method="dialog" class="p-6 space-y-3 text-sm">
+    <h3 class="font-semibold text-base">Registrar numero</h3>
+    <p class="text-slate-500">PIN de 6 digitos da verificacao em duas etapas do numero.</p>
+    <input name="pin" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required class="w-full border rounded-lg px-3 py-2 text-center text-lg tracking-widest" placeholder="000000" />
+    <p id="pin-error" class="text-red-600" hidden></p>
+    <div class="flex justify-end gap-2"><button type="button" id="pin-cancel" class="px-3 py-2 rounded-lg border">Cancelar</button><button type="submit" class="px-3 py-2 rounded-lg bg-green-600 text-white">Registrar</button></div>
+  </form>
+</dialog>
 
 <script>
 // ============================================================================
@@ -270,6 +320,100 @@ async function loadConfig() {
     $('#cfg-meta').textContent = h.meta_base_url;
   } catch (e) { $('#cfg-backend').textContent = 'indisponivel'; }
 }
+
+// ============================================================ [T4] CONTAS ====
+App.accounts = [];
+const badge = (on, label, cls = 'bg-green-100 text-green-800') => `<span class="badge ${on ? cls : 'bg-slate-100 text-slate-500'}">${label}</span>`;
+async function loadAccounts() {
+  const tb = $('#acc-rows');
+  try {
+    App.accounts = await apiFetch('/api-oficial/accounts');
+  } catch (e) { tb.innerHTML = `<tr><td colspan="5" class="px-4 py-6 text-center text-red-600">Erro ao carregar contas: ${esc(e.message)}</td></tr>`; return; }
+  if (!App.accounts.length) { tb.innerHTML = '<tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">Nenhuma conta. Clique em "+ Nova conta".</td></tr>'; return; }
+  tb.innerHTML = App.accounts.map((a) => `
+    <tr data-account-id="${a.id}" class="border-t">
+      <td class="px-4 py-3"><div class="font-medium">${esc(a.label)}</div><div class="text-xs text-slate-500">${esc(a.verified_name || '')} ${esc(a.display_phone || '')}</div></td>
+      <td class="px-4 py-3 font-mono text-xs">${esc(a.phone_number_id)}</td>
+      <td class="px-4 py-3 font-mono text-xs">${esc(a.waba_id || '-')}</td>
+      <td class="px-4 py-3 space-x-1">
+        ${badge(a.active, 'ativa')}${badge(a.last_test_ok, 'testada', 'bg-blue-100 text-blue-800')}${badge(a.registered, 'registrada')}${badge(a.subscribed, 'app inscrito')}${badge(a.has_access_token, 'token')}
+      </td>
+      <td class="px-4 py-3 text-right whitespace-nowrap space-x-1">
+        <button data-act="test" class="px-2 py-1 rounded border text-xs hover:bg-slate-50">Testar</button>
+        <button data-act="register" class="px-2 py-1 rounded border text-xs hover:bg-slate-50">Registrar</button>
+        <button data-act="subscribe" class="px-2 py-1 rounded border text-xs hover:bg-slate-50">Inscrever app</button>
+        <button data-act="edit" class="px-2 py-1 rounded border text-xs hover:bg-slate-50">Editar</button>
+        <button data-act="delete" class="px-2 py-1 rounded border text-xs text-red-600 hover:bg-red-50">Excluir</button>
+      </td>
+    </tr>`).join('');
+  document.dispatchEvent(new CustomEvent('accounts:loaded'));
+}
+App.loadAccounts = loadAccounts;
+App.hooks.onTab.contas = loadAccounts;
+
+function openAccountForm(acc) {
+  const f = $('#acc-form');
+  f.reset();
+  $('#acc-form-error').hidden = true;
+  $('#acc-form-title').textContent = acc ? 'Editar conta' : 'Nova conta';
+  $$('[data-secret-hint]', f).forEach((el) => { el.hidden = !acc; });
+  f.elements.id.value = acc?.id || '';
+  for (const k of ['label', 'phone_number_id', 'waba_id', 'app_id', 'display_phone', 'verify_token']) f.elements[k].value = acc?.[k] || '';
+  f.elements.active.checked = acc ? !!acc.active : true;
+  $('#acc-dialog').showModal();
+}
+$('#acc-new').addEventListener('click', () => openAccountForm(null));
+$('#acc-cancel').addEventListener('click', () => $('#acc-dialog').close());
+$('#pin-cancel').addEventListener('click', () => $('#pin-dialog').close());
+$('#acc-form').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const f = ev.target; const err = $('#acc-form-error');
+  const body = {};
+  for (const k of ['label', 'phone_number_id', 'waba_id', 'app_id', 'display_phone', 'verify_token', 'access_token', 'app_secret']) body[k] = f.elements[k].value;
+  body.active = f.elements.active.checked;
+  const id = f.elements.id.value;
+  $('#acc-save').disabled = true; err.hidden = true;
+  try {
+    if (id) await apiFetch(`/api-oficial/accounts/${id}`, { method: 'PATCH', body });
+    else await apiFetch('/api-oficial/accounts', { method: 'POST', body });
+    $('#acc-dialog').close(); toast(id ? 'Conta atualizada' : 'Conta criada', 'ok'); loadAccounts();
+  } catch (e) { err.textContent = e.data?.error === 'PHONE_NUMBER_ID_JA_CADASTRADO' ? 'Ja existe uma conta com esse Phone Number ID.' : ('Erro: ' + e.message); err.hidden = false; }
+  finally { $('#acc-save').disabled = false; }
+});
+
+function metaErrMsg(e) {
+  const d = e.data || {};
+  if (d.error === 'META_ERROR') return `Meta recusou (${d.code ?? '?'}): ${d.message}`;
+  if (d.error === 'META_UNREACHABLE') return 'Nao consegui falar com a Meta: ' + (d.message || '');
+  return e.message;
+}
+$('#acc-rows').addEventListener('click', async (ev) => {
+  const btn = ev.target.closest('button[data-act]'); if (!btn) return;
+  const tr = btn.closest('tr'); const id = tr.dataset.accountId; const act = btn.dataset.act;
+  const acc = App.accounts.find((a) => a.id === id);
+  if (act === 'edit') return openAccountForm(acc);
+  if (act === 'delete') {
+    if (!confirm(`Excluir a conta "${acc.label}"? Conversas e mensagens dela tambem serao apagadas.`)) return;
+    try { await apiFetch(`/api-oficial/accounts/${id}`, { method: 'DELETE' }); toast('Conta excluida', 'ok'); loadAccounts(); } catch (e) { toast(e.message, 'error'); }
+    return;
+  }
+  if (act === 'register') {
+    const d = $('#pin-dialog'); const f = $('#pin-form'); f.reset(); $('#pin-error').hidden = true; d.dataset.accountId = id; d.showModal();
+    return;
+  }
+  btn.disabled = true; btn.textContent = '...';
+  try {
+    if (act === 'test') { const r = await apiFetch(`/api-oficial/accounts/${id}/test`, { method: 'POST' }); toast(`OK: ${r.verified_name} (${r.display_phone_number || ''}) qualidade ${r.quality_rating || '-'}`, 'ok'); }
+    if (act === 'subscribe') { const r = await apiFetch(`/api-oficial/accounts/${id}/subscribe`, { method: 'POST' }); toast(`App inscrito na WABA (${r.apps.length} app(s))`, 'ok'); }
+  } catch (e) { toast(metaErrMsg(e), 'error'); }
+  loadAccounts();
+});
+$('#pin-form').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const d = $('#pin-dialog'); const id = d.dataset.accountId; const pin = ev.target.elements.pin.value;
+  try { await apiFetch(`/api-oficial/accounts/${id}/register`, { method: 'POST', body: { pin } }); d.close(); toast('Numero registrado na Cloud API', 'ok'); loadAccounts(); }
+  catch (e) { $('#pin-error').textContent = metaErrMsg(e); $('#pin-error').hidden = false; }
+});
 
 // ---- boot ----
 (async () => {

@@ -76,7 +76,7 @@ Aceitacao:
 
 ---
 
-## [~] T4 - Contas (conectar WhatsApp Oficial)
+## [x] T4 - Contas (conectar WhatsApp Oficial)
 
 Entrega: CRUD de `whatsapp_api_accounts` (label, phone_number_id, waba_id,
 access_token, app_secret, verify_token). Botoes Testar, Registrar (PIN),
@@ -86,17 +86,17 @@ Endpoints: `GET/POST/PATCH/DELETE /api-oficial/accounts(/:id)`,
 `POST /api-oficial/accounts/:id/(test|register|subscribe)`.
 
 Aceitacao:
-- [ ] Criar/editar/remover conta persiste no banco.
-- [ ] "Testar" chama `GET {META_BASE_URL}/{phone_number_id}` e retorna o
+- [x] Criar/editar/remover conta persiste no banco.
+- [x] "Testar" chama `GET {META_BASE_URL}/{phone_number_id}` e retorna o
       `verified_name` do mock.
-- [ ] "Registrar" com PIN chama o register do mock e marca a conta registrada.
-- [ ] "Inscrever app" chama `subscribed_apps` do mock e a lista deixa de estar
+- [x] "Registrar" com PIN chama o register do mock e marca a conta registrada.
+- [x] "Inscrever app" chama `subscribed_apps` do mock e a lista deixa de estar
       vazia.
-- [ ] Access token e app secret NUNCA aparecem em resposta pro front.
+- [x] Access token e app secret NUNCA aparecem em resposta pro front.
 
 ---
 
-## [ ] T5 - Webhook da Meta (respostas chegando)
+## [~] T5 - Webhook da Meta (respostas chegando)
 
 Entrega: `GET /whatsapp/webhook` (verificacao com `hub.challenge`) e
 `POST /whatsapp/webhook` (acha conta por `phone_number_id`, valida

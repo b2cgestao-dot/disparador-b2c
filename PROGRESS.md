@@ -11,8 +11,8 @@ STATUS: TODO | IN_PROGRESS | DONE | BLOCKED
 
 ## Estado atual
 
-- Tarefa em foco: T4 (contas)
-- Ultima stack verde: 2026-08-25 16:45 (`./verify.sh t3` = 0)
+- Tarefa em foco: T5 (webhook da Meta)
+- Ultima stack verde: 2026-08-25 17:02 (`./verify.sh t4` = 0)
 
 ## Log
 
@@ -20,8 +20,8 @@ STATUS: TODO | IN_PROGRESS | DONE | BLOCKED
 - T1  | DONE | 2026-08-25 16:28 | db/schema.sql idempotente (9 tabelas, RLS select authenticated, grants explicitos, colunas secretas da conta ocultas de authenticated, publication realtime, bucket wa-media publico). test/t1_schema.test.js verde (6 testes).
 - T2  | DONE | 2026-08-25 16:33 | Fastify 5 :3000, CORS, bodyLimit 50MB, parser JSON preservando rawBody, auth por JWT do Supabase (requireAuth), metaFetch via META_BASE_URL, /health, /_debug/echo-hmac (so dev). test/t2_backend.test.js verde (6 testes, inclui checagem estatica de rota duplicada).
 - T3  | DONE | 2026-08-25 16:45 | web/index.html (1 arquivo, Tailwind+supabase-js via CDN): login Supabase Auth, menu lateral data-view, views inicio/apioficial/config, abas contas/inbox/templates/disparo/fluxos/relatorio, App.api() com JWT, API_URL='/api' (backend faz rewriteUrl tirando /api). Backend serve web/ em `/` localmente. test/t3_front.test.js roda em Chrome headless real via CDP (test/browser.mjs, WebSocket nativo do Node 22, zero deps): 8 testes verdes.
-- T4  | IN_PROGRESS | 2026-08-25 16:46 | CRUD de contas + testar/registrar/inscrever contra o mock-meta.
-- T5  | TODO | -            | -
+- T4  | DONE | 2026-08-25 17:02 | /api-oficial/accounts CRUD (+/test, /register, /subscribe, /subscribed-apps) com requireAuth; publicAccount() remove access_token/app_secret e expoe has_*; PATCH com segredo vazio mantem o atual; erros da Meta viram 502 META_ERROR {code,message}. Front: aba Contas (tabela, dialog de conta, dialog de PIN, badges). 14 testes verdes (11 API + 3 no Chrome).
+- T5  | IN_PROGRESS | 2026-08-25 17:03 | GET/POST /whatsapp/webhook, assinatura sobre rawBody, contato/conversa/mensagem, midia no Storage, eventos crus.
 - T6  | TODO | -            | -
 - T7  | TODO | -            | -
 - T8  | TODO | -            | -
