@@ -1,0 +1,8 @@
+{
+  "name": "mock-meta",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": { "start": "node src/index.js" },
+  "dependencies": { "fastify": "^5.0.0" }
+}

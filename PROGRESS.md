@@ -1,0 +1,56 @@
+# PROGRESS.md - Estado da construcao (fonte de verdade no disco)
+
+O agente atualiza este arquivo a cada mudanca de estado de tarefa. Se o contexto
+reiniciar, e daqui que voce retoma. Nao apague historico: acrescente.
+
+Formato de cada entrada:
+`TX | STATUS | timestamp | nota curta`
+STATUS: TODO | IN_PROGRESS | DONE | BLOCKED
+
+---
+
+## Estado atual
+
+- Tarefa em foco: T1 (banco / schema idempotente)
+- Ultima stack verde: 2026-08-25 16:20 (`./verify.sh smoke` = 0)
+
+## Log
+
+- T0  | DONE | 2026-08-25 16:20 | Harness completo: colima+docker+compose instalados via brew; supabase local (6 containers, sem studio/analytics/etc); mock-meta (:4000) emulando Graph + /_simulate/inbound assinado; backend esqueleto (:3000, rawBody, 50MB, auth, metaFetch); schema.sql completo; seed (teste@disparador.local / Teste123! + conta PNID-TEST-0001); verify.sh (smoke|tN|all|up|down, --down). `./verify.sh smoke` verde.
+- T1  | IN_PROGRESS | 2026-08-25 16:21 | schema.sql ja escrito na T0; falta o teste t1 (idempotencia, colunas, publication, bucket).
+- T2  | TODO | -            | -
+- T3  | TODO | -            | -
+- T4  | TODO | -            | -
+- T5  | TODO | -            | -
+- T6  | TODO | -            | -
+- T7  | TODO | -            | -
+- T8  | TODO | -            | -
+- T9  | TODO | -            | -
+- T10 | BLOCKED | -         | Deploy real aguarda VPS + dominio + DNS do dono.
+- T11 | TODO | -            | -
+
+## Blockers abertos
+
+- BLUEPRINT AUSENTE: o arquivo `BLUEPRINT-Disparador-WhatsApp-API-Oficial.md` nao
+  estava na pasta do projeto (nem no disco, nem no Google Drive do dono). A
+  construcao segue usando TASKS.md + HARNESS-SETUP.md + CLAUDE.md como
+  especificacao (tabelas, endpoints e comportamentos estao descritos la). Quando o
+  dono colocar o blueprint na pasta, reconciliar nomes de colunas/telas com ele.
+
+## Notas de tentativas (bugs encontrados e como resolvi)
+
+- T0 | Docker nao existia na maquina (nem Docker Desktop). Instalei `colima`
+  + `docker` + `docker-compose` via Homebrew (CLI puro, sem admin). Colima roda
+  com `--cpu 2 --memory 3` (maquina tem 8 GB). O supabase CLI precisa de
+  `DOCKER_HOST=unix://$HOME/.colima/default/docker.sock` (verify.sh exporta).
+  `host.docker.internal` funciona no colima tanto por default quanto via
+  `extra_hosts: host-gateway` (testado).
+- T0 | Seed falhou com `permission denied for table whatsapp_api_accounts` pra
+  service_role. Causa: no Supabase CLI 2.111 os default privileges do role
+  postgres em `public` dao so TRUNCATE/REFERENCES/TRIGGER pras roles da API.
+  Solucao: schema.sql faz `grant select,insert,update,delete ... to service_role`
+  e `grant select ... to authenticated` explicitamente por tabela.
+- T0 | O blueprint nao esta na pasta; TASKS.md + HARNESS-SETUP.md sao a spec.
+- T0 | Supabase CLI 2.111 imprime tambem PUBLISHABLE_KEY/SECRET_KEY (novo
+  formato). Usamos os JWTs legados ANON_KEY/SERVICE_ROLE_KEY (sync-env prefere
+  eles; cai pro novo formato se nao existirem).

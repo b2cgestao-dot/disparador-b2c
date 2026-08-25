@@ -1,0 +1,14 @@
+{
+  "name": "disparador-b2c",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "test": "node --test --test-concurrency=1 test/*.test.js",
+    "seed": "node db/seed.mjs",
+    "verify": "./verify.sh"
+  },
+  "devDependencies": {
+    "@supabase/supabase-js": "^2.45.0"
+  }
+}

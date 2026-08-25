@@ -1,0 +1,51 @@
+# Stack LOCAL de dev/teste: backend (api) + Meta falso (mock-meta).
+# O Supabase local roda separado (supabase start) e e alcancado via host.docker.internal.
+# Suba com: docker compose up -d --build   |  derrube com: docker compose down
+services:
+  api:
+    build: ./server
+    container_name: disparador-api
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      NODE_ENV: development
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      SUPABASE_URL: ${SUPABASE_URL_DOCKER:-http://host.docker.internal:54321}
+      SUPABASE_PUBLIC_URL: ${SUPABASE_URL:-http://127.0.0.1:54321}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:?defina SUPABASE_SERVICE_KEY no .env}
+      META_BASE_URL: ${META_BASE_URL:-http://mock-meta:4000}
+      META_API_VERSION: ${META_API_VERSION:-v21.0}
+      WEB_DIR: /app/web
+    volumes:
+      - ./web:/app/web:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      mock-meta:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  mock-meta:
+    build: ./mock-meta
+    container_name: disparador-mock-meta
+    ports:
+      - "4000:4000"
+    environment:
+      PORT: 4000
+      SUPABASE_URL: ${SUPABASE_URL_DOCKER:-http://host.docker.internal:54321}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:?defina SUPABASE_SERVICE_KEY no .env}
+      WEBHOOK_URL: http://api:3000/whatsapp/webhook
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4000/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
