@@ -62,21 +62,21 @@ Aceitacao:
 
 ---
 
-## [~] T3 - Front esqueleto + Auth
+## [x] T3 - Front esqueleto + Auth
 
 Entrega: `web/index.html` (servido estatico), login via Supabase Auth, menu
 lateral com `data-view`, `sb`/`API_URL` no topo do script, troca de views por
 JS.
 
 Aceitacao:
-- [ ] A pagina carrega sem erro de console.
-- [ ] Login com o usuario seed (email/senha) autentica via Supabase local.
-- [ ] Apos login, o app aparece; sem login, so a tela de login.
-- [ ] Trocar de item no menu troca a view (`inicio`, `apioficial`, `config`).
+- [x] A pagina carrega sem erro de console.
+- [x] Login com o usuario seed (email/senha) autentica via Supabase local.
+- [x] Apos login, o app aparece; sem login, so a tela de login.
+- [x] Trocar de item no menu troca a view (`inicio`, `apioficial`, `config`).
 
 ---
 
-## [ ] T4 - Contas (conectar WhatsApp Oficial)
+## [~] T4 - Contas (conectar WhatsApp Oficial)
 
 Entrega: CRUD de `whatsapp_api_accounts` (label, phone_number_id, waba_id,
 access_token, app_secret, verify_token). Botoes Testar, Registrar (PIN),

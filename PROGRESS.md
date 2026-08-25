@@ -11,16 +11,16 @@ STATUS: TODO | IN_PROGRESS | DONE | BLOCKED
 
 ## Estado atual
 
-- Tarefa em foco: T3 (front esqueleto + auth)
-- Ultima stack verde: 2026-08-25 16:33 (`./verify.sh t2` = 0)
+- Tarefa em foco: T4 (contas)
+- Ultima stack verde: 2026-08-25 16:45 (`./verify.sh t3` = 0)
 
 ## Log
 
 - T0  | DONE | 2026-08-25 16:20 | Harness completo: colima+docker+compose instalados via brew; supabase local (6 containers, sem studio/analytics/etc); mock-meta (:4000) emulando Graph + /_simulate/inbound assinado; backend esqueleto (:3000, rawBody, 50MB, auth, metaFetch); schema.sql completo; seed (teste@disparador.local / Teste123! + conta PNID-TEST-0001); verify.sh (smoke|tN|all|up|down, --down). `./verify.sh smoke` verde.
 - T1  | DONE | 2026-08-25 16:28 | db/schema.sql idempotente (9 tabelas, RLS select authenticated, grants explicitos, colunas secretas da conta ocultas de authenticated, publication realtime, bucket wa-media publico). test/t1_schema.test.js verde (6 testes).
 - T2  | DONE | 2026-08-25 16:33 | Fastify 5 :3000, CORS, bodyLimit 50MB, parser JSON preservando rawBody, auth por JWT do Supabase (requireAuth), metaFetch via META_BASE_URL, /health, /_debug/echo-hmac (so dev). test/t2_backend.test.js verde (6 testes, inclui checagem estatica de rota duplicada).
-- T3  | IN_PROGRESS | 2026-08-25 16:34 | web/index.html + teste via Chrome headless (CDP com WebSocket nativo do Node).
-- T4  | TODO | -            | -
+- T3  | DONE | 2026-08-25 16:45 | web/index.html (1 arquivo, Tailwind+supabase-js via CDN): login Supabase Auth, menu lateral data-view, views inicio/apioficial/config, abas contas/inbox/templates/disparo/fluxos/relatorio, App.api() com JWT, API_URL='/api' (backend faz rewriteUrl tirando /api). Backend serve web/ em `/` localmente. test/t3_front.test.js roda em Chrome headless real via CDP (test/browser.mjs, WebSocket nativo do Node 22, zero deps): 8 testes verdes.
+- T4  | IN_PROGRESS | 2026-08-25 16:46 | CRUD de contas + testar/registrar/inscrever contra o mock-meta.
 - T5  | TODO | -            | -
 - T6  | TODO | -            | -
 - T7  | TODO | -            | -
@@ -38,6 +38,13 @@ STATUS: TODO | IN_PROGRESS | DONE | BLOCKED
   dono colocar o blueprint na pasta, reconciliar nomes de colunas/telas com ele.
 
 ## Notas de tentativas (bugs encontrados e como resolvi)
+
+- T3 | Testar front sem framework: usei Chrome headless (ja instalado na
+  maquina) via Chrome DevTools Protocol com o WebSocket nativo do Node 22
+  (test/browser.mjs). Ruidos que NAO sao erro e sao filtrados: favicon 404
+  (resolvido com favicon inline data:), net::ERR_ABORTED (requests cancelados)
+  e o 400 proposital do teste de senha errada. Se nao houver Chrome, defina
+  CHROME_BIN.
 
 - T0 | Docker nao existia na maquina (nem Docker Desktop). Instalei `colima`
   + `docker` + `docker-compose` via Homebrew (CLI puro, sem admin). Colima roda

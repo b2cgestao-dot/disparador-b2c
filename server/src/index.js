@@ -41,6 +41,9 @@ const app = Fastify({
   logger: { level: process.env.LOG_LEVEL || 'info' },
   bodyLimit: 50 * 1024 * 1024, // 50 MB (anti-bug #1: disparo grande dava 413)
   trustProxy: true,
+  // O front chama API_URL='/api' + rota. Em producao o Caddy encaminha /api/*
+  // pra ca; aqui tiramos o prefixo pra rota interna (/api/api-oficial/x -> /api-oficial/x).
+  rewriteUrl(req) { return req.url.startsWith('/api/') ? req.url.slice(4) : req.url; },
 });
 await app.register(cors, { origin: true });
 

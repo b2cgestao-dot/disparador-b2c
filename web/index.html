@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Disparador WhatsApp - API Oficial</title>
+<link rel="icon" href="data:," />
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  [hidden] { display: none !important; }
+  .nav-item.active { background: rgb(22 163 74 / 0.18); color: #fff; }
+  .tab-btn.active { border-color: #16a34a; color: #14532d; font-weight: 600; }
+  .msg-in { background: #fff; }
+  .msg-out { background: #dcfce7; }
+  .msg-flow { background: #ede9fe; }
+  .badge { display:inline-block; padding: 0 .5rem; border-radius: 9999px; font-size: .7rem; line-height: 1.25rem; }
+  ::-webkit-scrollbar { width: 8px; height: 8px } ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800 h-screen overflow-hidden">
+
+<!-- ===================================================== LOGIN ===== -->
+<div id="login-screen" class="h-full flex items-center justify-center p-4">
+  <form id="login-form" class="bg-white rounded-2xl shadow-lg p-8 w-full max-w-sm space-y-4">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-green-600 text-white grid place-items-center font-bold">W</div>
+      <div>
+        <h1 class="text-lg font-semibold leading-tight">Disparador WhatsApp</h1>
+        <p class="text-xs text-slate-500">API Oficial (Cloud API)</p>
+      </div>
+    </div>
+    <label class="block text-sm">E-mail
+      <input id="login-email" type="email" required autocomplete="username" class="mt-1 w-full border rounded-lg px-3 py-2" placeholder="voce@empresa.com" />
+    </label>
+    <label class="block text-sm">Senha
+      <input id="login-password" type="password" required autocomplete="current-password" class="mt-1 w-full border rounded-lg px-3 py-2" />
+    </label>
+    <p id="login-error" class="text-sm text-red-600" hidden></p>
+    <button id="login-btn" type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white rounded-lg py-2 font-medium">Entrar</button>
+    <p class="text-[11px] text-slate-400 text-center">Usuarios sao criados pelo administrador no Supabase Auth.</p>
+  </form>
+</div>
+
+<!-- ======================================================= APP ===== -->
+<div id="app" class="h-full flex" hidden>
+  <aside class="w-60 bg-slate-900 text-slate-300 flex flex-col shrink-0">
+    <div class="px-4 py-4 flex items-center gap-2 border-b border-slate-800">
+      <div class="w-8 h-8 rounded-lg bg-green-600 text-white grid place-items-center font-bold">W</div>
+      <div class="leading-tight"><div class="text-white font-semibold text-sm">Disparador</div><div class="text-[11px] text-slate-400">API Oficial</div></div>
+    </div>
+    <nav class="flex-1 p-2 space-y-1 text-sm">
+      <a href="#/inicio" data-view="inicio" class="nav-item block px-3 py-2 rounded-lg hover:bg-slate-800">Inicio</a>
+      <a href="#/apioficial" data-view="apioficial" class="nav-item block px-3 py-2 rounded-lg hover:bg-slate-800">WhatsApp API Oficial</a>
+      <a href="#/config" data-view="config" class="nav-item block px-3 py-2 rounded-lg hover:bg-slate-800">Configuracoes</a>
+    </nav>
+    <div class="p-3 border-t border-slate-800 text-xs">
+      <div id="user-email" class="truncate text-slate-400"></div>
+      <button id="logout-btn" class="mt-2 text-slate-300 hover:text-white underline">Sair</button>
+    </div>
+  </aside>
+
+  <main class="flex-1 min-w-0 flex flex-col">
+    <header class="bg-white border-b px-6 py-3 flex items-center justify-between">
+      <h2 id="view-title" class="font-semibold">Inicio</h2>
+      <div id="header-actions" class="flex items-center gap-2 text-sm"></div>
+    </header>
+
+    <div class="flex-1 min-h-0 overflow-auto">
+      <!-- ---------------- INICIO ---------------- -->
+      <section data-view-panel="inicio" class="p-6 space-y-6">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div class="bg-white rounded-xl p-4 shadow-sm"><div class="text-xs text-slate-500">Contas ativas</div><div id="kpi-accounts" class="text-2xl font-semibold">-</div></div>
+          <div class="bg-white rounded-xl p-4 shadow-sm"><div class="text-xs text-slate-500">Conversas abertas</div><div id="kpi-open" class="text-2xl font-semibold">-</div></div>
+          <div class="bg-white rounded-xl p-4 shadow-sm"><div class="text-xs text-slate-500">Nao lidas</div><div id="kpi-unread" class="text-2xl font-semibold">-</div></div>
+          <div class="bg-white rounded-xl p-4 shadow-sm"><div class="text-xs text-slate-500">Envios (24h)</div><div id="kpi-sends" class="text-2xl font-semibold">-</div></div>
+        </div>
+        <div class="bg-white rounded-xl p-5 shadow-sm text-sm text-slate-600 space-y-2">
+          <p class="font-medium text-slate-800">Por onde comecar</p>
+          <ol class="list-decimal ml-5 space-y-1">
+            <li>Em <b>WhatsApp API Oficial &rsaquo; Contas</b>, cadastre a conta (Phone Number ID, WABA ID, token, app secret, verify token).</li>
+            <li>Clique em <b>Testar</b>, depois <b>Registrar</b> (PIN) e <b>Inscrever app</b>.</li>
+            <li>Sincronize os <b>Templates</b> e faca um <b>Disparo</b> com sua lista CSV.</li>
+            <li>Atenda as respostas no <b>Inbox</b>; crie <b>Fluxos</b> pros botoes.</li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- ---------------- API OFICIAL ---------------- -->
+      <section data-view-panel="apioficial" class="h-full flex flex-col" hidden>
+        <div class="bg-white border-b px-6">
+          <div id="tabs" class="flex gap-4 text-sm">
+            <button data-tab="contas" class="tab-btn py-3 border-b-2 border-transparent">Contas</button>
+            <button data-tab="inbox" class="tab-btn py-3 border-b-2 border-transparent">Inbox</button>
+            <button data-tab="templates" class="tab-btn py-3 border-b-2 border-transparent">Templates</button>
+            <button data-tab="disparo" class="tab-btn py-3 border-b-2 border-transparent">Disparo</button>
+            <button data-tab="fluxos" class="tab-btn py-3 border-b-2 border-transparent">Fluxos</button>
+            <button data-tab="relatorio" class="tab-btn py-3 border-b-2 border-transparent">Relatorio</button>
+          </div>
+        </div>
+        <div class="flex-1 min-h-0 overflow-auto">
+          <div data-tab-panel="contas" class="p-6"><p class="text-sm text-slate-500">Contas: em construcao (T4).</p></div>
+          <div data-tab-panel="inbox" class="h-full" hidden><p class="p-6 text-sm text-slate-500">Inbox: em construcao (T6).</p></div>
+          <div data-tab-panel="templates" class="p-6" hidden><p class="text-sm text-slate-500">Templates: em construcao (T7).</p></div>
+          <div data-tab-panel="disparo" class="p-6" hidden><p class="text-sm text-slate-500">Disparo: em construcao (T8).</p></div>
+          <div data-tab-panel="fluxos" class="p-6" hidden><p class="text-sm text-slate-500">Fluxos: em construcao (T9).</p></div>
+          <div data-tab-panel="relatorio" class="p-6" hidden><p class="text-sm text-slate-500">Relatorio: em construcao (T8).</p></div>
+        </div>
+      </section>
+
+      <!-- ---------------- CONFIG ---------------- -->
+      <section data-view-panel="config" class="p-6 space-y-4" hidden>
+        <div class="bg-white rounded-xl p-5 shadow-sm text-sm space-y-2">
+          <p class="font-medium text-slate-800">Conexoes</p>
+          <div class="grid grid-cols-[140px_1fr] gap-y-1">
+            <span class="text-slate-500">Supabase URL</span><code id="cfg-supabase-url" class="text-xs"></code>
+            <span class="text-slate-500">API URL</span><code id="cfg-api-url" class="text-xs"></code>
+            <span class="text-slate-500">Backend</span><span id="cfg-backend" class="text-xs">verificando...</span>
+            <span class="text-slate-500">Meta (Graph)</span><code id="cfg-meta" class="text-xs"></code>
+            <span class="text-slate-500">Usuario</span><span id="cfg-user" class="text-xs"></span>
+          </div>
+        </div>
+        <div class="bg-white rounded-xl p-5 shadow-sm text-sm text-slate-600">
+          <p class="font-medium text-slate-800 mb-1">Webhook da Meta</p>
+          <p>URL de callback: <code id="cfg-webhook-url" class="text-xs"></code></p>
+          <p class="mt-1">Verify token: o que voce cadastrou na conta. Inscreva o campo <b>messages</b> no painel da Meta e clique em <b>Inscrever app</b> na conta.</p>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<div id="toast" class="fixed bottom-4 right-4 bg-slate-900 text-white text-sm px-4 py-2 rounded-lg shadow-lg" hidden></div>
+
+<script>
+// ============================================================================
+// [PLUG-KEY] Troque para o Supabase de producao (Project Settings -> API):
+//   SUPABASE_URL      = 'https://<ref>.supabase.co'
+//   SUPABASE_ANON_KEY = '<anon public key>'   (NUNCA a service_role aqui)
+// API_URL fica '/api' (o Caddy encaminha /api/* pro backend).
+// ============================================================================
+const SUPABASE_URL = 'http://127.0.0.1:54321';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0';
+const API_URL = '/api';
+
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+const App = {
+  ready: false,
+  config: { SUPABASE_URL, API_URL },
+  state: { user: null, session: null, view: null, tab: null },
+  views: { inicio: 'Inicio', apioficial: 'WhatsApp API Oficial', config: 'Configuracoes' },
+  tabs: ['contas', 'inbox', 'templates', 'disparo', 'fluxos', 'relatorio'],
+  hooks: { onView: {}, onTab: {} },   // preenchidos pelos modulos (T4..T9)
+};
+window.App = App;
+
+// ---- utilitarios ----
+function toast(msg, kind = 'info') {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.className = 'fixed bottom-4 right-4 text-white text-sm px-4 py-2 rounded-lg shadow-lg ' + (kind === 'error' ? 'bg-red-600' : kind === 'ok' ? 'bg-green-600' : 'bg-slate-900');
+  t.hidden = false;
+  clearTimeout(toast._t); toast._t = setTimeout(() => { t.hidden = true; }, 3500);
+}
+App.toast = toast;
+
+// chamada autenticada ao backend (JWT do Supabase no Authorization)
+async function apiFetch(path, { method = 'GET', body, headers = {} } = {}) {
+  const token = App.state.session?.access_token;
+  const res = await fetch(API_URL + path, {
+    method,
+    headers: { ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: 'Bearer ' + token } : {}), ...headers },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  const text = await res.text();
+  let data; try { data = JSON.parse(text); } catch { data = text; }
+  if (!res.ok) { const e = new Error(data?.message || data?.error || ('HTTP ' + res.status)); e.status = res.status; e.data = data; throw e; }
+  return data;
+}
+App.api = apiFetch;
+
+// ---- auth ----
+function showLogin() {
+  $('#app').hidden = true;
+  $('#login-screen').hidden = false;
+}
+function showApp() {
+  $('#login-screen').hidden = true;
+  $('#app').hidden = false;
+  $('#user-email').textContent = App.state.user?.email || '';
+  $('#cfg-user').textContent = App.state.user?.email || '';
+}
+async function setSession(session) {
+  App.state.session = session;
+  App.state.user = session?.user || null;
+  if (session) { showApp(); routeFromHash(); } else { showLogin(); }
+}
+$('#login-form').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const btn = $('#login-btn'); const err = $('#login-error');
+  btn.disabled = true; err.hidden = true;
+  const { data, error } = await sb.auth.signInWithPassword({ email: $('#login-email').value.trim(), password: $('#login-password').value });
+  btn.disabled = false;
+  if (error) { err.textContent = 'Nao foi possivel entrar: ' + error.message; err.hidden = false; return; }
+  await setSession(data.session);
+});
+$('#logout-btn').addEventListener('click', async () => { await sb.auth.signOut(); await setSession(null); });
+App.login = (email, password) => sb.auth.signInWithPassword({ email, password }).then(async ({ data, error }) => { if (error) throw error; await setSession(data.session); return data.session; });
+App.logout = () => sb.auth.signOut().then(() => setSession(null));
+
+// ---- navegacao (views + abas) ----
+function showView(view, tab) {
+  if (!App.views[view]) view = 'inicio';
+  App.state.view = view;
+  $$('[data-view-panel]').forEach((p) => { p.hidden = p.dataset.viewPanel !== view; });
+  $$('.nav-item').forEach((a) => a.classList.toggle('active', a.dataset.view === view));
+  $('#view-title').textContent = App.views[view];
+  $('#header-actions').innerHTML = '';
+  if (view === 'apioficial') showTab(tab || App.state.tab || 'contas');
+  if (view === 'inicio') loadKpis();
+  if (view === 'config') loadConfig();
+  const hash = '#/' + view + (view === 'apioficial' ? '/' + App.state.tab : '');
+  if (location.hash !== hash) history.replaceState(null, '', hash);
+  (App.hooks.onView[view] || (() => {}))();
+}
+function showTab(tab) {
+  if (!App.tabs.includes(tab)) tab = 'contas';
+  App.state.tab = tab;
+  $$('[data-tab-panel]').forEach((p) => { p.hidden = p.dataset.tabPanel !== tab; });
+  $$('.tab-btn').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+  const hash = '#/apioficial/' + tab;
+  if (location.hash !== hash) history.replaceState(null, '', hash);
+  (App.hooks.onTab[tab] || (() => {}))();
+}
+App.showView = showView; App.showTab = showTab;
+$$('.nav-item').forEach((a) => a.addEventListener('click', (ev) => { ev.preventDefault(); showView(a.dataset.view); }));
+$$('.tab-btn').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
+function routeFromHash() {
+  const m = location.hash.match(/^#\/([a-z]+)(?:\/([a-z]+))?/);
+  showView(m ? m[1] : 'inicio', m ? m[2] : undefined);
+}
+window.addEventListener('hashchange', () => { if (App.state.user) routeFromHash(); });
+
+// ---- inicio / config ----
+async function loadKpis() {
+  try {
+    const [acc, open, unread, sends] = await Promise.all([
+      sb.from('whatsapp_api_accounts').select('id', { count: 'exact', head: true }).eq('active', true),
+      sb.from('wa_conversations').select('id', { count: 'exact', head: true }).eq('status', 'open'),
+      sb.from('wa_conversations').select('id', { count: 'exact', head: true }).gt('unread_count', 0),
+      sb.from('whatsapp_api_sends').select('id', { count: 'exact', head: true }).gte('created_at', new Date(Date.now() - 86400e3).toISOString()),
+    ]);
+    $('#kpi-accounts').textContent = acc.count ?? 0;
+    $('#kpi-open').textContent = open.count ?? 0;
+    $('#kpi-unread').textContent = unread.count ?? 0;
+    $('#kpi-sends').textContent = sends.count ?? 0;
+  } catch (e) { console.warn('kpis', e); }
+}
+async function loadConfig() {
+  $('#cfg-supabase-url').textContent = SUPABASE_URL;
+  $('#cfg-api-url').textContent = API_URL;
+  $('#cfg-webhook-url').textContent = location.origin + '/whatsapp/webhook';
+  try {
+    const h = await fetch(API_URL + '/health').then((r) => r.json());
+    $('#cfg-backend').textContent = 'ok (' + h.env + ', uptime ' + h.uptime_s + 's)';
+    $('#cfg-meta').textContent = h.meta_base_url;
+  } catch (e) { $('#cfg-backend').textContent = 'indisponivel'; }
+}
+
+// ---- boot ----
+(async () => {
+  const { data } = await sb.auth.getSession();
+  await setSession(data.session);
+  sb.auth.onAuthStateChange((_ev, session) => {
+    if (!!session !== !!App.state.session) setSession(session);
+    else { App.state.session = session; App.state.user = session?.user || null; }
+  });
+  App.ready = true;
+})();
+</script>
+</body>
+</html>
