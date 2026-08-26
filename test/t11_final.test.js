@@ -18,7 +18,7 @@ test('T11: RELATORIO-FINAL.md existe com modulos, cobertura, mocks, credenciais 
   for (const sec of ['Modulos concluidos', 'Cobertura de testes', 'mock', 'CREDENTIALS-TODO', 'mock -> producao', 'graph.facebook.com', 'schema.sql', 'PLUG-KEY']) {
     assert.ok(r.includes(sec), 'relatorio menciona: ' + sec);
   }
-  assert.match(r, /T10[^\n]*BLOCKED/);
+  assert.match(r, /T10[^\n]*(BLOCKED|DONE)/);
 });
 
 test('T11: PROGRESS.md nao tem tarefa TODO nem IN_PROGRESS alem da T11', () => {

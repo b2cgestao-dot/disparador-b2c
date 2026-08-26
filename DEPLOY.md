@@ -1,7 +1,7 @@
 # DEPLOY.md - Runbook de producao (VPS + Caddy + Docker)
 
-> Estado: **BLOCKED** ate o dono ter VPS + dominio + DNS (ver `CREDENTIALS-TODO.md`).
-> Tudo abaixo esta pronto e testado localmente; so falta a maquina e o dominio.
+> Estado: **NO AR** desde 2026-08-26 em https://disparador.b2cgestao.com.br via Dokploy (secao 0.1).
+> A secao com Caddy (1 em diante) e o caminho alternativo sem Dokploy.
 
 ## 0. O que vai pro ar
 

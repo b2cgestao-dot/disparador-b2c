@@ -193,7 +193,7 @@ Aceitacao:
 
 ---
 
-## [!] T10 - Artefatos de deploy (BLOCKED: aguardando VPS)
+## [x] T10 - Artefatos de deploy (DONE: deploy real feito via Dokploy em 2026-08-26)
 
 Entrega (so os artefatos, sem deploy real): `server/Dockerfile` (node 22-alpine),
 `docker-compose.prod.yml` (servico api, env, healthcheck, restart
@@ -203,8 +203,8 @@ unless-stopped), `Caddyfile` (static + proxy `/api/*` + no-cache na raiz `/`),
 Aceitacao:
 - [x] Os quatro artefatos existem e passam num lint/checagem basica de sintaxe.
 - [x] O `Caddyfile` tem `no-cache` cobrindo a raiz `/`.
-- [x] Marcado `BLOCKED` ate o dono ter VPS + dominio + DNS. Registrar isso em
-      `CREDENTIALS-TODO.md`.
+- [x] Deploy real: VPS Hostinger KVM 4 + Dokploy (Dockerfile da raiz), dominio
+      `disparador.b2cgestao.com.br` com Let's Encrypt, webhook da Meta ativo.
 
 ---
 

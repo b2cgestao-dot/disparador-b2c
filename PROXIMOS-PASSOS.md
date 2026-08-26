@@ -1,5 +1,7 @@
 # PROXIMOS-PASSOS.md - O que o dono faz a partir de agora
 
+Estado em 2026-08-26: EM PRODUCAO em https://disparador.b2cgestao.com.br (Dokploy). Fases 1-5 concluidas com o numero de TESTE da Meta; falta a Fase 6 (primeiro uso) e o numero comercial real.
+
 Estado em 2026-08-25: sistema completo e testado em mock (102 testes verdes).
 Banco de PRODUCAO ja criado no Supabase via CLI (projeto `DISPARADOR-B2C`,
 ref `sdnciriewxconxyoehwo`, sa-east-1) com o schema aplicado. Chaves em

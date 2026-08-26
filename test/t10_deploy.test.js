@@ -58,10 +58,10 @@ test('T10: DEPLOY.md e um runbook com scp + docker compose up -d --build e o che
   const d = read('DEPLOY.md');
   assert.match(d, /scp /); assert.match(d, /docker compose -f docker-compose\.prod\.yml up -d --build/);
   assert.match(d, /schema\.sql/); assert.match(d, /whatsapp\/webhook/); assert.match(d, /Inscrever app/);
-  assert.match(d, /BLOCKED/);
+  assert.match(d, /BLOCKED|NO AR/);
 });
 
-test('T10: tarefa marcada como BLOCKED (VPS + dominio + DNS) em TASKS.md e CREDENTIALS-TODO.md', () => {
-  assert.match(read('TASKS.md'), /## \[!\] T10 - Artefatos de deploy \(BLOCKED/);
+test('T10: estado da tarefa registrado em TASKS.md (BLOCKED aguardando VPS ou DONE apos o deploy) e em CREDENTIALS-TODO.md', () => {
+  assert.match(read('TASKS.md'), /## \[(!|x)\] T10 - Artefatos de deploy \((BLOCKED|DONE)/);
   assert.match(read('CREDENTIALS-TODO.md'), /VPS/); assert.match(read('CREDENTIALS-TODO.md'), /DEPLOY\.md/);
 });

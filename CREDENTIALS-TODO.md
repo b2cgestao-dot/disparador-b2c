@@ -29,7 +29,7 @@ Trocar `META_BASE_URL` de `http://mock-meta:4000` para
 - [x] Conta cadastrada no banco de PRODUCAO (whatsapp_api_accounts) em 2026-08-25
 - [x] App ja inscrito na WABA de teste (`subscribed_apps` confirmado via Graph)
 - [ ] Numero REAL (comercial): adicionar na WABA comercial, registrar com PIN de 6 digitos e cadastrar como 2a conta no painel
-- [ ] Cadastrar a URL do webhook na Meta (`https://<dominio>/whatsapp/webhook` + verify token) e assinar o campo `messages` - depende da VPS (T10)
+- [x] Webhook registrado na Meta via Graph API (2026-08-26): callback `https://disparador.b2cgestao.com.br/whatsapp/webhook`, campo `messages` ativo
 - [ ] URL de Politica de Privacidade publica (pra sair do modo de teste)
 
 ## Onde cada chave entra (marcadores `[PLUG-KEY]` no codigo)
@@ -52,13 +52,11 @@ Trocar `META_BASE_URL` de `http://mock-meta:4000` para
 4. Meta: cadastrar a conta na tela de Contas -> Testar -> Registrar (PIN) -> Inscrever app; cadastrar webhook `https://<dominio>/whatsapp/webhook` + verify token e assinar `messages`.
 5. Templates -> Sincronizar; disparo de teste; responder do celular e conferir o Inbox.
 
-## VPS + dominio (Tarefa T10, BLOCKED)
+## VPS + dominio (Tarefa T10, DONE em 2026-08-26 via Dokploy)
 
 - [x] VPS Hostinger KVM 4 com Dokploy: IP 179.199.133.18. Dominio `disparador.b2cgestao.com.br` (Cloudflare, registro A -> IP; manter DNS only ate o Let's Encrypt emitir)
-- [ ] Chave SSH pro agente acessar o servidor
-- [ ] Rodar o runbook de `DEPLOY.md` (Docker + Caddy + subir os containers)
+- [x] Deploy feito pelo Dokploy (DEPLOY.md secao 0.1). Atualizar = git push na main + Deploy no Dokploy
 
 ---
 
-Enquanto esses itens estao em aberto, o sistema roda 100 por cento em mock local
-e todos os testes passam contra o mock-meta e o Supabase local.
+O sistema esta em PRODUCAO em https://disparador.b2cgestao.com.br com o numero de teste da Meta. Local continua 100% mock pra desenvolvimento e testes.

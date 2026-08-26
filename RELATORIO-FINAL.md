@@ -22,7 +22,7 @@ mock-meta). Nenhuma chave real da Meta e nenhuma VPS foram usadas.
 | T7 Templates | DONE | Sincronizar, listar, criar (cabecalho de midia via upload resumable), cache em `wa_templates` |
 | T8 Disparo | DONE | Job em memoria + polling, CSV robusto, opt-out, tag da lista, `sends-report` com erros em PT |
 | T9 Fluxos | DONE | Motor por botao QUICK_REPLY, delay, acoes (tag/opt-out/fechar), respeita a janela |
-| T10 Deploy | BLOCKED | Artefatos prontos e validados (`Dockerfile`, `docker-compose.prod.yml`, `Caddyfile`, `DEPLOY.md`). Deploy real aguarda VPS + dominio + DNS |
+| T10 Deploy | DONE (26/08) | Artefatos validados; deploy real via Dokploy em https://disparador.b2cgestao.com.br (VPS Hostinger + Cloudflare DNS + Let's Encrypt); webhook da Meta ativo |
 | T11 Relatorio | DONE | Este arquivo + `./verify.sh all` verde + commit final |
 
 ## 2. Cobertura de testes por modulo (`node --test`, sem framework externo)
