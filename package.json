@@ -4,6 +4,9 @@
   "type": "module",
   "engines": { "node": ">=22" },
   "scripts": {
+    "deps": "./verify.sh deps",
+    "dev": "./verify.sh up",
+    "stop": "./verify.sh down",
     "test": "node --test --test-concurrency=1 test/*.test.js",
     "seed": "node db/seed.mjs",
     "verify": "./verify.sh"
