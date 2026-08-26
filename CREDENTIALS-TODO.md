@@ -22,15 +22,14 @@ codigo deve ter uma linha aqui. O agente ADICIONA itens conforme constroi.
 Trocar `META_BASE_URL` de `http://mock-meta:4000` para
 `https://graph.facebook.com` e cadastrar a conta real com:
 
-- [ ] App ID
-- [ ] App Secret
-- [ ] Phone Number ID (o codigo longo, nao o telefone)
-- [ ] WABA ID
-- [ ] Access Token (token de sistema, expiracao Nunca)
-- [ ] Verify Token (voce inventa)
-- [ ] PIN de 6 digitos pra registrar o numero
-- [ ] Cadastrar a URL do webhook na Meta e assinar o campo `messages`
-- [ ] Inscrever o app na WABA (`subscribed_apps`) - o passo que destrava tudo
+- [x] App "DISPARADOR B2C" criado (App ID 2120262292702343). App Secret salvo em `.env.meta` (fora do git)
+- [x] Numero de TESTE da Meta: Phone Number ID 1316081858247969 (+1 555-201-2180), WABA de teste 1217938763844050
+- [x] Access Token de usuario do sistema (expiracao Nunca; escopos whatsapp_business_messaging/management) - validado via debug_token; salvo em `.env.meta`
+- [x] Verify Token gerado (em `.env.meta`)
+- [x] Conta cadastrada no banco de PRODUCAO (whatsapp_api_accounts) em 2026-08-25
+- [x] App ja inscrito na WABA de teste (`subscribed_apps` confirmado via Graph)
+- [ ] Numero REAL (comercial): adicionar na WABA comercial, registrar com PIN de 6 digitos e cadastrar como 2a conta no painel
+- [ ] Cadastrar a URL do webhook na Meta (`https://<dominio>/whatsapp/webhook` + verify token) e assinar o campo `messages` - depende da VPS (T10)
 - [ ] URL de Politica de Privacidade publica (pra sair do modo de teste)
 
 ## Onde cada chave entra (marcadores `[PLUG-KEY]` no codigo)
