@@ -28,7 +28,10 @@ Trocar `META_BASE_URL` de `http://mock-meta:4000` para
 - [x] Verify Token gerado (em `.env.meta`)
 - [x] Conta cadastrada no banco de PRODUCAO (whatsapp_api_accounts) em 2026-08-25
 - [x] App ja inscrito na WABA de teste (`subscribed_apps` confirmado via Graph)
-- [ ] Numero REAL (comercial): adicionar na WABA comercial, registrar com PIN de 6 digitos e cadastrar como 2a conta no painel
+- [x] Numero REAL (comercial) cadastrado em producao (2026-08-26): +55 75 8801-3343, Phone Number ID 1297181490139531, WABA "b2cgestao" 2229030331268197 (ja registrado na Cloud API, sem PIN). App inscrito via subscribed_apps.
+      ATENCAO: essa WABA tambem tem o app LeadConnector (GoHighLevel/CRM) inscrito - webhooks chegam nos dois; janela de 24h e templates sao compartilhados.
+- [ ] Criar e aprovar templates na WABA comercial (nao tem nenhum; hello_world existe so no numero de teste)
+- [ ] Nome de exibicao do numero comercial (name_status NON_EXISTS) e verificacao do negocio (sobe o limite de 250 conversas/24h)
 - [x] Webhook registrado na Meta via Graph API (2026-08-26): callback `https://disparador.b2cgestao.com.br/whatsapp/webhook`, campo `messages` ativo
 - [ ] URL de Politica de Privacidade publica (pra sair do modo de teste)
 

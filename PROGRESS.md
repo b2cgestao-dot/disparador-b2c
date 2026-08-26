@@ -35,6 +35,9 @@ STATUS: TODO | IN_PROGRESS | DONE | BLOCKED
 
 - 2026-08-26 | Producao no ar. Usuarios criados (juliowcezar22@gmail.com, ibugia08@gmail.com). Conta do numero de teste da Meta cadastrada. Faltam: numero comercial real (2a conta) e politica de privacidade pra sair do modo de teste.
 
+- 2026-08-26 | Numero comercial +55 75 8801-3343 (WABA b2cgestao 2229030331268197) cadastrado como 2a conta em producao; app inscrito na WABA (que ja tinha o LeadConnector/CRM inscrito). Sem templates na WABA comercial ainda.
+- 2026-08-26 | Bug do 9o digito BR corrigido (wa_id no contato + variantes no inbound + mock fiel); dados de producao unificados via db/fix-br-9digit.sql.
+
 ## Blockers abertos
 
 - BLUEPRINT AUSENTE: o arquivo `BLUEPRINT-Disparador-WhatsApp-API-Oficial.md` nao
