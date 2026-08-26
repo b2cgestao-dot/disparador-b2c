@@ -15,7 +15,7 @@ codigo deve ter uma linha aqui. O agente ADICIONA itens conforme constroi.
 - [x] `SUPABASE_ANON_KEY` (salvo em `.env.production`) -> FALTA colar no topo do `web/index.html` na hora do deploy
 - [x] `SUPABASE_SERVICE_KEY` (salvo em `.env.production`) -> FALTA copiar pro `.env` da VPS
 - [x] `db/schema.sql` aplicado no projeto de producao via `supabase db query --linked -f db/schema.sql` (2x, idempotente): 9 tabelas, publication realtime, bucket wa-media
-- [ ] Criar o(s) usuario(s) atendente(s) em Authentication -> Users (ou `supabase` admin API)
+- [x] Usuarios atendentes criados em producao (2026-08-26, role=admin nos metadados): juliowcezar22@gmail.com e ibugia08@gmail.com. Novos usuarios: Authentication -> Users -> Add user (Auto Confirm).
 
 ## Meta / WhatsApp Cloud API (por conta, cadastrado na tela de Contas)
 
@@ -54,8 +54,7 @@ Trocar `META_BASE_URL` de `http://mock-meta:4000` para
 
 ## VPS + dominio (Tarefa T10, BLOCKED)
 
-- [ ] Contratar VPS (1-2 GB) e pegar o IP publico
-- [ ] Registrar dominio + criar registro A `painel` -> IP
+- [x] VPS Hostinger KVM 4 com Dokploy: IP 179.199.133.18. Dominio `disparador.b2cgestao.com.br` (Cloudflare, registro A -> IP; manter DNS only ate o Let's Encrypt emitir)
 - [ ] Chave SSH pro agente acessar o servidor
 - [ ] Rodar o runbook de `DEPLOY.md` (Docker + Caddy + subir os containers)
 
