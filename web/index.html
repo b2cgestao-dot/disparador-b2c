@@ -592,7 +592,11 @@ $('#acc-rows').addEventListener('click', async (ev) => {
   }
   btn.disabled = true; btn.textContent = '...';
   try {
-    if (act === 'test') { const r = await apiFetch(`/api-oficial/accounts/${id}/test`, { method: 'POST' }); toast(`OK: ${r.verified_name} (${r.display_phone_number || ''}) qualidade ${r.quality_rating || '-'}`, 'ok'); }
+    if (act === 'test') {
+      const r = await apiFetch(`/api-oficial/accounts/${id}/test`, { method: 'POST' });
+      toast(`OK: ${r.verified_name} (${r.display_phone_number || ''}) qualidade ${r.quality_rating || '-'}${r.messaging_limit_tier ? ' · limite ' + r.messaging_limit_tier.replace('TIER_', '') + '/24h' : ''}`, 'ok');
+      if (r.avisos?.length) setTimeout(() => alert(r.avisos.join('\n\n')), 300);
+    }
     if (act === 'subscribe') { const r = await apiFetch(`/api-oficial/accounts/${id}/subscribe`, { method: 'POST' }); toast(`App inscrito na WABA (${r.apps.length} app(s))`, 'ok'); }
   } catch (e) { toast(metaErrMsg(e), 'error'); }
   loadAccounts();

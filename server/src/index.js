@@ -262,7 +262,7 @@ const WA_ERROR_HELP = {
   33: { motivo: 'Objeto nao existe ou sem permissao (phone_number_id/waba_id errados?).', fix: 'Confira o Phone Number ID e o WABA ID cadastrados na conta.' },
   100: { motivo: 'Parametro invalido na requisicao.', fix: 'Confira o numero de destino, o nome/idioma do template e as variaveis.' },
   190: { motivo: 'Token de acesso expirado ou invalido.', fix: 'Gere um token de sistema com expiracao "Nunca" e atualize na tela de Contas.' },
-  200: { motivo: 'Permissao insuficiente pra enviar mensagens.', fix: 'Adicione whatsapp_business_messaging ao token.' },
+  200: { motivo: 'Sem permissao pra enviar por essa WABA. Causa mais comum: numero em COEXISTENCIA (tambem ativo no app WhatsApp Business do celular, conectado por um parceiro como GHL/LeadConnector) - so o app do parceiro pode enviar por ele. Menos comum: usuario do sistema sem a WABA atribuida.', fix: 'Confira em Contas > Testar se aparece "coexistencia". Se sim: use um numero dedicado a API (novo numero, ou tire este do app do celular) ou envie pelo parceiro. Se nao: em Configuracoes do negocio > Usuarios do sistema, atribua a WABA com controle total.' },
   368: { motivo: 'Conta temporariamente bloqueada por violacao de politicas.', fix: 'Verifique as notificacoes no Gerenciador de Negocios e recorra se necessario.' },
   80007: { motivo: 'Limite de taxa da WABA atingido.', fix: 'Reduza a velocidade do disparo e aguarde.' },
   130429: { motivo: 'Limite de envio por segundo atingido (rate limit).', fix: 'Diminua a velocidade do disparo (mensagens por segundo) e reenvie os que falharam.' },
@@ -664,14 +664,17 @@ app.register(async function apiOficial(api) {
     const acc = await getAccount(req.params.id);
     if (!acc) return httpError(reply, 404, 'CONTA_NAO_ENCONTRADA');
     try {
-      const info = await metaFetch(acc, acc.phone_number_id, { query: { fields: 'id,verified_name,display_phone_number,quality_rating,code_verification_status,name_status' } });
+      const info = await metaFetch(acc, acc.phone_number_id, { query: { fields: 'id,verified_name,display_phone_number,quality_rating,code_verification_status,name_status,is_on_biz_app,account_mode,messaging_limit_tier,platform_type,status' } });
       await updateAccount(acc.id, {
         verified_name: info.verified_name || null,
         display_phone: info.display_phone_number || acc.display_phone,
         quality_rating: info.quality_rating || null,
         last_test_at: nowIso(), last_test_ok: true,
       });
-      return { ok: true, ...info };
+      const avisos = [];
+      if (info.is_on_biz_app === true) avisos.push('COEXISTENCIA: este numero tambem esta no app WhatsApp Business do celular (conectado por um parceiro). Apps proprios NAO conseguem enviar por ele (erro #200); so o app do parceiro. Use um numero dedicado a API ou remova-o do app do celular.');
+      if (info.name_status && info.name_status !== 'APPROVED') avisos.push(`Nome de exibicao ${info.name_status}: aprove o nome no WhatsApp Manager pra subir o limite de envio.`);
+      return { ok: true, ...info, coexistence: info.is_on_biz_app === true, avisos };
     } catch (e) {
       await updateAccount(acc.id, { last_test_at: nowIso(), last_test_ok: false }).catch(() => {});
       return reply.code(502).send({ ok: false, ...metaErrorPayload(e) });
