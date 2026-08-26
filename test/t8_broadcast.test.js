@@ -160,3 +160,19 @@ test('T8: nao existe rota duplicada (/sends vs /sends-report); o processo sobe',
   assert.equal((await authed('/api-oficial/sends')).status, 404, '/sends nao existe (evita conflito)');
   assert.equal((await api('/health')).status, 200);
 });
+
+test('T8: 9o digito BR - numero de 12 digitos no CSV vira canonico com 9 e nao duplica contato existente', async () => {
+  const with9 = '5571' + '9' + String(6 + Math.floor(Math.random() * 4)) + String(Math.floor(1000000 + Math.random() * 8999999)); // 55 DDD 9 [6-9]XXXXXXX (celular)
+  const without9 = with9.slice(0, 4) + with9.slice(5);
+  const { data: c } = await sb.from('wa_contacts').insert({ account_id: acc.id, phone: with9, wa_id: without9, name: 'Ja existe' }).select('id').single();
+  const r = await authed('/api-oficial/broadcast', { method: 'POST', body: { account_id: acc.id, list_name: 'nono digito', template: { name: 'hello_world', language: 'en_US' }, csv: `${without9},Sem Nove\n${with9.slice(2)},Sem DDI`, rate_per_sec: 50 } });
+  assert.equal(r.status, 202, JSON.stringify(r.body));
+  assert.equal(r.body.total, 1, 'os dois viram o mesmo numero canonico');
+  assert.equal(r.body.duplicates, 1);
+  const done = await pollUntilDone(r.body.job_id);
+  assert.equal(done.sent, 1);
+  assert.equal((await mockMessages({ to: with9 })).length, 1);
+  const { data: contacts } = await sb.from('wa_contacts').select('id, tags').eq('account_id', acc.id).or(`phone.eq.${with9},phone.eq.${without9}`);
+  assert.equal(contacts.length, 1, 'sem contato duplicado'); assert.equal(contacts[0].id, c.id);
+  assert.ok(contacts[0].tags.includes('nono digito'));
+});

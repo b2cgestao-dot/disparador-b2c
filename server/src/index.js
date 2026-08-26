@@ -63,6 +63,17 @@ app.addContentTypeParser('*', { parseAs: 'buffer' }, (req, body, done) => {
 const onlyDigits = (s) => String(s ?? '').replace(/\D/g, '');
 const nowIso = () => new Date().toISOString();
 const hoursFromNow = (h) => new Date(Date.now() + h * 3600 * 1000).toISOString();
+// --- 9o digito BR: celular 55+DDD+9XXXXXXXX (13) <-> formato antigo 55+DDD+XXXXXXXX (12).
+// A Meta devolve/identifica (wa_id) numeros BR no formato SEM o 9; nos guardamos o canonico COM o 9.
+const isBrWith9 = (d) => /^55\d{2}9\d{8}$/.test(d);
+const isBrWithout9 = (d) => /^55\d{2}[6-9]\d{7}$/.test(d);
+const canonicalPhone = (raw) => { const d = onlyDigits(raw); return isBrWithout9(d) ? d.slice(0, 4) + '9' + d.slice(4) : d; };
+const phoneVariants = (raw) => {
+  const d = onlyDigits(raw); const out = new Set([d]);
+  if (isBrWith9(d)) out.add(d.slice(0, 4) + d.slice(5));
+  if (isBrWithout9(d)) out.add(d.slice(0, 4) + '9' + d.slice(4));
+  return [...out];
+};
 const SECRET_FIELDS = ['access_token', 'app_secret'];
 let waOnInbound = null; // gancho dos fluxos (secao [10]): (account, contact, conversation, message) => Promise
 function publicAccount(row) {
@@ -190,7 +201,7 @@ function textPayload(to, text) {
 }
 // Envia pela Meta e grava em wa_messages (sucesso ou falha). Retorna { ok, wamid, message, error }.
 async function waSendAndRecord({ account, conversation, contact, kind = 'text', text, template, sentBy = null, isFlow = false, flowId = null }) {
-  const to = onlyDigits(contact.phone);
+  const to = canonicalPhone(contact.phone);
   let payload, type, body, templateName = null;
   if (kind === 'template') {
     type = 'template'; templateName = template.name;
@@ -211,7 +222,8 @@ async function waSendAndRecord({ account, conversation, contact, kind = 'text', 
     const { data: saved, error } = await sb.from('wa_messages').insert(row).select('*').single();
     if (error) throw error;
     await sb.from('wa_conversations').update({ last_message_at: nowIso(), last_message_preview: body.slice(0, 200), last_direction: 'out' }).eq('id', conversation.id);
-    await sb.from('wa_contacts').update({ last_outbound_at: nowIso() }).eq('id', contact.id);
+    const waId = onlyDigits(res?.contacts?.[0]?.wa_id || '');
+    await sb.from('wa_contacts').update({ last_outbound_at: nowIso(), ...(waId && waId !== contact.wa_id ? { wa_id: waId } : {}) }).eq('id', contact.id);
     return { ok: true, wamid: row.wamid, message: saved };
   } catch (e) {
     if (e instanceof MetaError) {
@@ -324,8 +336,8 @@ function parseCsv(text) {
 function normalizePhone(raw) {
   const d = onlyDigits(raw);
   if (d.length < 10 || d.length > 15) return null;
-  if (d.length === 10 || d.length === 11) return '55' + d;
-  return d;
+  if (d.length === 10 || d.length === 11) return canonicalPhone('55' + d);
+  return canonicalPhone(d);
 }
 function csvToContacts(csv) {
   const rows = parseCsv(csv);
@@ -373,7 +385,7 @@ function jobPublic(j) {
   };
 }
 async function upsertBroadcastContact(account, c, listName) {
-  const { data: existing } = await sb.from('wa_contacts').select('*').eq('account_id', account.id).eq('phone', c.phone).maybeSingle();
+  const existing = await findContactByAnyPhone(account.id, c.phone);
   if (existing) {
     const patch = {};
     if (c.name && !existing.name) patch.name = c.name;
@@ -1022,18 +1034,27 @@ async function downloadMediaToStorage(account, mediaId, mimeHint, wamid) {
   return { path: p, url: publicMediaUrl(p), mime: contentType, size: buf.length };
 }
 
-async function upsertContact(account, phone, name) {
-  const { data: existing, error: e0 } = await sb.from('wa_contacts').select('*').eq('account_id', account.id).eq('phone', phone).maybeSingle();
-  if (e0) throw e0;
+async function findContactByAnyPhone(accountId, raw) {
+  const variants = phoneVariants(raw);
+  const { data, error } = await sb.from('wa_contacts').select('*').eq('account_id', accountId)
+    .or(`phone.in.(${variants.join(',')}),wa_id.in.(${variants.join(',')})`).order('created_at');
+  if (error) throw error;
+  if (!data?.length) return null;
+  const canon = canonicalPhone(raw);
+  return data.find((c) => c.phone === canon) || data[0];
+}
+async function upsertContact(account, from, name) {
+  const existing = await findContactByAnyPhone(account.id, from);
   const patch = { last_inbound_at: nowIso() };
   if (name && !existing?.name) patch.name = name;
   if (existing) {
+    if (!existing.wa_id || existing.wa_id !== from) patch.wa_id = from; // como a Meta identifica esse contato
     const { data, error } = await sb.from('wa_contacts').update(patch).eq('id', existing.id).select('*').single();
     if (error) throw error;
     return data;
   }
-  const { data, error } = await sb.from('wa_contacts').insert({ account_id: account.id, phone, name: name || null, ...patch }).select('*').single();
-  if (error) { if (error.code === '23505') return upsertContact(account, phone, name); throw error; }
+  const { data, error } = await sb.from('wa_contacts').insert({ account_id: account.id, phone: canonicalPhone(from), wa_id: from, name: name || null, ...patch }).select('*').single();
+  if (error) { if (error.code === '23505') return upsertContact(account, from, name); throw error; }
   return data;
 }
 

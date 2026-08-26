@@ -161,11 +161,11 @@ test('T6: nova mensagem inbound (via mock) chega pelo Realtime num cliente auten
     const t = setTimeout(() => reject(new Error('timeout subscribe realtime')), 10000);
     channel.subscribe((status, err) => { if (status === 'SUBSCRIBED') { clearTimeout(t); resolve(); } if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { clearTimeout(t); reject(new Error('realtime: ' + status + ' ' + (err?.message || ''))); } });
   });
-  await sleep(500); // realtime local demora um pouco pra ligar a replicacao
+  await sleep(1500); // realtime local demora um pouco pra ligar a replicacao (mais logo apos subir)
   const from = phone();
   const r = await simulateInbound({ phone_number_id: acc.phone_number_id, from, type: 'text', text: 'realtime?' });
   assert.equal(r.status, 200);
-  const ev = await waitFor(() => received.find((m) => m.wamid === r.wamid), { timeout: 8000, label: 'evento realtime' });
+  const ev = await waitFor(() => received.find((m) => m.wamid === r.wamid), { timeout: 15000, label: 'evento realtime' });
   assert.equal(ev.body, 'realtime?');
   assert.equal(ev.direction, 'in');
   await c.removeChannel(channel);
@@ -175,3 +175,21 @@ test('T6: nova mensagem inbound (via mock) chega pelo Realtime num cliente auten
 
 // o cliente realtime mantem o event loop vivo; garante que o processo do teste termina
 after(() => { setTimeout(() => process.exit(process.exitCode || 0), 1500).unref(); });
+
+test('T6: 9o digito BR - envio vai pro numero COM 9, guarda o wa_id sem 9 e a resposta cai na mesma conversa', async () => {
+  const with9 = '5575' + '9' + String(6 + Math.floor(Math.random() * 4)) + String(Math.floor(1000000 + Math.random() * 8999999)); // 55 DDD 9 [6-9]XXXXXXX (celular)
+  const without9 = with9.slice(0, 4) + with9.slice(5);
+  const { conv, msg } = await openConversation(with9, 'oi');
+  const r = await authed(`/api-oficial/conversations/${conv.id}/send`, { method: 'POST', body: { text: 'ola' } });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  const sent = await mockMessages({ to: with9 });
+  assert.equal(sent.length, 1, 'enviado pro formato com 9');
+  const { data: c } = await sb.from('wa_contacts').select('phone, wa_id').eq('id', msg.contact_id).single();
+  assert.equal(c.phone, with9); assert.equal(c.wa_id, without9, 'wa_id vindo da resposta da Meta (mock)');
+  const back = await simulateInbound({ phone_number_id: acc.phone_number_id, from: without9, type: 'text', text: 'voltei sem o 9' });
+  const m2 = await waitFor(() => msgByWamid(back.wamid), { label: 'resposta' });
+  assert.equal(m2.conversation_id, conv.id, 'mesma conversa');
+  const r2 = await authed(`/api-oficial/conversations/${conv.id}/send`, { method: 'POST', body: { text: 'de novo' } });
+  assert.equal(r2.status, 200);
+  assert.equal((await mockMessages({ to: with9 })).length, 2, 'resposta tambem vai pro formato com 9');
+});

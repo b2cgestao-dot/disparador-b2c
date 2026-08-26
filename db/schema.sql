@@ -256,3 +256,6 @@ create policy "wa-media leitura publica" on storage.objects
 -- ============================================================================
 alter table public.whatsapp_api_sends add column if not exists delivery_status text; -- accepted|sent|delivered|read|failed (via webhook de status)
 alter table public.wa_flows add column if not exists match_text boolean not null default false; -- true = texto digitado igual ao gatilho tambem dispara
+-- 9o digito BR: a Meta identifica numeros brasileiros pelo formato SEM o 9 (wa_id). Guardamos os dois.
+alter table public.wa_contacts add column if not exists wa_id text;
+create index if not exists idx_wa_contacts_wa_id on public.wa_contacts (account_id, wa_id);

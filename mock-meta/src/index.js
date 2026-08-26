@@ -283,7 +283,9 @@ app.post('/:pnid/messages', async (req, reply) => {
   else if (b.type === 'interactive') body = b.interactive?.body?.text || '[interactive]';
   else body = `[${b.type}]`;
   state.messages.push({ id: wamid, phone_number_id: req.params.pnid, to, type: b.type, body, payload: b, at: Date.now() });
-  return { messaging_product: 'whatsapp', contacts: [{ input: b.to, wa_id: to }], messages: [{ id: wamid, message_status: 'accepted' }] };
+  // Como a Meta: celular BR com 9 (55+DDD+9XXXXXXXX) e identificado pelo wa_id SEM o 9
+  const waId = /^55\d{2}9\d{8}$/.test(to) ? to.slice(0, 4) + to.slice(5) : to;
+  return { messaging_product: 'whatsapp', contacts: [{ input: b.to, wa_id: waId }], messages: [{ id: wamid, message_status: 'accepted' }] };
 });
 
 app.get('/:wabaId/message_templates', async (req, reply) => {

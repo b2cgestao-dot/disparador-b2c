@@ -156,3 +156,26 @@ test('T5: conversa fechada reabre quando chega mensagem nova', async () => {
   assert.equal(conv.unread_count, 1);
   assert.equal(conv.closed_at, null);
 });
+
+test('T5: 9o digito BR - inbound com wa_id SEM o 9 casa o contato criado COM o 9 e guarda o wa_id', async () => {
+  const with9 = '5575' + '9' + String(6 + Math.floor(Math.random() * 4)) + String(Math.floor(1000000 + Math.random() * 8999999)); // 55 DDD 9 [6-9]XXXXXXX (celular)
+  const without9 = with9.slice(0, 4) + with9.slice(5);
+  const { data: c } = await sb.from('wa_contacts').insert({ account_id: acc.id, phone: with9, name: 'Do Disparo' }).select('*').single();
+  const r = await simulateInbound({ phone_number_id: acc.phone_number_id, from: without9, name: 'Nome do WhatsApp', type: 'text', text: 'respondi' });
+  assert.equal(r.status, 200);
+  const msg = await waitFor(() => msgByWamid(r.wamid), { label: 'inbound' });
+  assert.equal(msg.contact_id, c.id, 'mesmo contato (nao duplicou)');
+  const { data: c2 } = await sb.from('wa_contacts').select('*').eq('id', c.id).single();
+  assert.equal(c2.phone, with9, 'phone canonico continua com 9');
+  assert.equal(c2.wa_id, without9, 'wa_id guardado como a Meta identifica');
+  assert.equal(c2.name, 'Do Disparo', 'nome existente preservado');
+  const { data: contacts } = await sb.from('wa_contacts').select('id').eq('account_id', acc.id).in('phone', [with9, without9]);
+  assert.equal(contacts.length, 1);
+  // contato NOVO chegando sem o 9 e criado ja no formato canonico com 9
+  const other = '5511' + String(6 + Math.floor(Math.random() * 4)) + String(Math.floor(1000000 + Math.random() * 8999999)); // 12 digitos, celular sem 9
+  const r2 = await simulateInbound({ phone_number_id: acc.phone_number_id, from: other, type: 'text', text: 'oi' });
+  const m2 = await waitFor(() => msgByWamid(r2.wamid), { label: 'inbound novo' });
+  const { data: c3 } = await sb.from('wa_contacts').select('phone, wa_id').eq('id', m2.contact_id).single();
+  assert.equal(c3.phone, other.slice(0, 4) + '9' + other.slice(4));
+  assert.equal(c3.wa_id, other);
+});
