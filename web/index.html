@@ -205,6 +205,9 @@
                   <label class="block">Nome da lista (vira tag)<input id="bc-list-name" class="mt-1 w-full border rounded-lg px-2 py-1.5" placeholder="Ex.: Clientes Agosto" /></label>
                   <label class="block">Velocidade<select id="bc-rate" class="mt-1 w-full border rounded-lg px-2 py-1.5"><option value="2">2 msg/s (seguro)</option><option value="5" selected>5 msg/s</option><option value="10">10 msg/s</option><option value="20">20 msg/s</option></select></label>
                 </div>
+                <div id="bc-header-media-wrap" class="border border-amber-200 bg-amber-50 rounded-lg p-3" hidden>
+                  <label class="block">Midia do cabecalho (<span id="bc-header-format"></span>) <span id="bc-header-default" class="text-slate-500"></span><input id="bc-header-file" type="file" class="mt-1 w-full text-xs" /></label>
+                </div>
                 <label class="block">Arquivo CSV <span class="text-slate-400">(telefone, nome, var2, var3... - 1a linha pode ser cabecalho)</span><input id="bc-file" type="file" accept=".csv,text/csv,text/plain" class="mt-1 w-full text-xs" /></label>
                 <textarea id="bc-csv" rows="8" class="w-full border rounded-lg px-3 py-2 font-mono text-xs" placeholder="telefone,nome&#10;5511999990001,Maria&#10;5511999990002,&quot;Silva, Joao&quot;"></textarea>
                 <div id="bc-preview" class="text-xs text-slate-600"></div>
@@ -746,24 +749,24 @@ $('#composer-send').addEventListener('click', sendText);
 $('#composer-text').addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); sendText(); } });
 $('#composer-send-template').addEventListener('click', async () => {
   const t = Inbox.templates[Number($('#composer-template').value)]; if (!t) return toast('Escolha um template', 'error');
-  const components = templateComponentsFromPrompt(t);
-  if (components === null) return;
+  if (tplNeedsMedia(t) && !t.header_media_url) return toast('Esse template tem cabecalho de midia sem midia padrao. Defina na aba Templates.', 'error');
+  const vars = templateVarsFromPrompt(t);
+  if (vars === null) return;
   try {
-    const r = await apiFetch(`/api-oficial/conversations/${Inbox.current.id}/send`, { method: 'POST', body: { template: { name: t.name, language: t.language, components } } });
+    const r = await apiFetch(`/api-oficial/conversations/${Inbox.current.id}/send`, { method: 'POST', body: { template: { name: t.name, language: t.language, vars } } });
     if (!Inbox.messages.some((m) => m.id === r.message.id)) { Inbox.messages.push(r.message); renderMessages(); }
     toast('Template enviado', 'ok');
   } catch (e) { toast('Meta recusou: ' + e.message, 'error'); }
 });
-// pergunta as variaveis {{n}} do corpo do template (simples: prompt por variavel)
-function templateComponentsFromPrompt(t) {
-  const body = (t.components || []).find((c) => c.type === 'BODY');
-  const n = body ? (body.text.match(/\{\{\d+\}\}/g) || []).length : 0;
-  if (!n) return [];
-  const params = [];
-  for (let i = 1; i <= n; i++) { const v = prompt(`Valor da variavel {{${i}}} do template ${t.name}:`); if (v === null) return null; params.push({ type: 'text', text: v }); }
-  return [{ type: 'body', parameters: params }];
+// pergunta as variaveis {{n}} do template (corpo e cabecalho de texto); o backend monta os components
+function templateVarsFromPrompt(t) {
+  const texts = (t.components || []).filter((c) => c.type === 'BODY' || (c.type === 'HEADER' && c.format === 'TEXT')).map((c) => c.text || '').join(' ');
+  const n = Math.max(0, ...(texts.match(/\{\{(\d+)\}\}/g) || []).map((m) => Number(m.replace(/\D/g, ''))));
+  const vars = [];
+  for (let i = 1; i <= n; i++) { const v = prompt(`Valor da variavel {{${i}}} do template ${t.name}:`); if (v === null) return null; vars.push(v); }
+  return vars;
 }
-App.templateComponentsFromPrompt = templateComponentsFromPrompt;
+App.templateVarsFromPrompt = templateVarsFromPrompt;
 
 async function saveContact(patch) {
   try { const c = await apiFetch(`/api-oficial/contacts/${Inbox.current.contact.id}`, { method: 'PATCH', body: patch }); Inbox.current.contact = c; renderThreadHeader(); renderSide(); inboxLoadList(); }
@@ -785,7 +788,7 @@ App.tpl = Tpl;
 // cache de templates aprovados de uma conta (alimenta o composer do inbox e o disparo)
 App.templateOptions = async (accountId) => {
   if (!accountId) return [];
-  const { data } = await sb.from('wa_templates').select('meta_id,name,language,category,status,components').eq('account_id', accountId).order('name');
+  const { data } = await sb.from('wa_templates').select('id,meta_id,name,language,category,status,components,header_media_url,header_media_filename').eq('account_id', accountId).order('name');
   return (data || []).filter((t) => !t.status || t.status === 'APPROVED');
 };
 async function tplInit() {
@@ -800,12 +803,21 @@ App.hooks.onTab.templates = tplInit;
 async function tplLoad() {
   if (!Tpl.account) { $('#tpl-rows').innerHTML = '<tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">Cadastre uma conta primeiro.</td></tr>'; return; }
   try { Tpl.list = await apiFetch(`/api-oficial/accounts/${Tpl.account}/templates-cache`); } catch (e) { toast(e.message, 'error'); return; }
+  App.hooks._tplListLoaded && App.hooks._tplListLoaded();
   tplRender();
 }
+const tplHeaderFormat = (t) => String((t.components || []).find((c) => c.type === 'HEADER')?.format || '').toUpperCase();
+const tplNeedsMedia = (t) => ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(tplHeaderFormat(t));
+App.tplNeedsMedia = tplNeedsMedia;
 function tplSummary(t) {
   const parts = [];
   for (const c of t.components || []) {
-    if (c.type === 'HEADER') parts.push(`<span class="badge bg-slate-100 text-slate-600">cabecalho ${esc(c.format || '')}${c.text ? ': ' + esc(c.text) : ''}</span>`);
+    if (c.type === 'HEADER') {
+      parts.push(`<span class="badge bg-slate-100 text-slate-600">cabecalho ${esc(c.format || '')}${c.text ? ': ' + esc(c.text) : ''}</span>`);
+      if (tplNeedsMedia(t)) parts.push(t.header_media_url
+        ? `<div class="flex items-center gap-2 mt-1">${c.format === 'IMAGE' ? `<img src="${esc(t.header_media_url)}" class="h-10 rounded border" />` : `<span class="text-xs">&#128206; ${esc(t.header_media_filename || 'midia')}</span>`}<button data-tpl-media="${t.id}" class="text-xs underline text-blue-700">trocar midia padrao</button></div>`
+        : `<div class="mt-1 text-xs text-amber-700">sem midia padrao - <button data-tpl-media="${t.id}" class="underline">definir ${esc((c.format || '').toLowerCase())} do cabecalho</button> (obrigatorio pra enviar)</div>`);
+    }
     if (c.type === 'BODY') parts.push(`<div class="text-slate-700">${esc(c.text || '')}</div>`);
     if (c.type === 'FOOTER') parts.push(`<div class="text-xs text-slate-400">${esc(c.text || '')}</div>`);
     if (c.type === 'BUTTONS') parts.push((c.buttons || []).map((b) => `<span class="badge ${b.type === 'QUICK_REPLY' ? 'bg-violet-100 text-violet-800' : 'bg-blue-100 text-blue-800'}">${esc(b.type)}: ${esc(b.text)}</span>`).join(' '));
@@ -819,6 +831,21 @@ function tplRender() {
   tb.innerHTML = Tpl.list.map((t) => `<tr class="border-t align-top"><td class="px-4 py-3 font-mono text-xs">${esc(t.name)}</td><td class="px-4 py-3">${esc(t.language)}</td><td class="px-4 py-3">${esc(t.category || '')}</td><td class="px-4 py-3">${badge(t.status === 'APPROVED', esc(t.status || '?'), t.status === 'APPROVED' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800')}</td><td class="px-4 py-3 space-y-1 max-w-md">${tplSummary(t)}</td></tr>`).join('');
 }
 $('#tpl-account').addEventListener('change', (ev) => { Tpl.account = ev.target.value; tplLoad(); });
+// midia padrao do cabecalho: escolhe arquivo -> base64 -> backend (Storage + cache)
+$('#tpl-rows').addEventListener('click', (ev) => {
+  const btn = ev.target.closest('button[data-tpl-media]'); if (!btn) return;
+  const t = Tpl.list.find((x) => x.id === btn.dataset.tplMedia); if (!t) return;
+  const fmt = tplHeaderFormat(t);
+  const inp = document.createElement('input'); inp.type = 'file';
+  inp.accept = fmt === 'IMAGE' ? 'image/jpeg,image/png' : fmt === 'VIDEO' ? 'video/mp4,video/3gpp' : '*/*';
+  inp.onchange = async () => {
+    const file = inp.files[0]; if (!file) return;
+    try { await App.setTemplateHeaderMedia(Tpl.account, t.id, file); toast('Midia padrao definida', 'ok'); await tplLoad(); }
+    catch (e) { toast(e.data?.detail || e.message, 'error'); }
+  };
+  inp.click();
+});
+App.setTemplateHeaderMedia = async (accountId, tplId, file) => apiFetch(`/api-oficial/accounts/${accountId}/templates/${tplId}/header-media`, { method: 'POST', body: { base64: await fileToBase64(file), mime: file.type || 'application/octet-stream', filename: file.name } });
 $('#tpl-sync').addEventListener('click', async () => {
   const btn = $('#tpl-sync'); btn.disabled = true; btn.textContent = 'Sincronizando...';
   try { const r = await apiFetch(`/api-oficial/accounts/${Tpl.account}/sync-templates`, { method: 'POST' }); toast(`${r.synced} template(s) sincronizado(s)`, 'ok'); await tplLoad(); }
@@ -909,6 +936,13 @@ function bcTemplateChanged() {
   }
   const n = (parts.join('\n').match(/\{\{\d+\}\}/g) || []).length;
   el.textContent = parts.join('\n') + (n ? `\n\nVariaveis: {{1}} = nome (2a coluna), {{2}} = 3a coluna, ...` : '');
+  const needs = tplNeedsMedia(Bc.template);
+  $('#bc-header-media-wrap').hidden = !needs;
+  if (needs) {
+    $('#bc-header-format').textContent = tplHeaderFormat(Bc.template).toLowerCase();
+    $('#bc-header-default').textContent = Bc.template.header_media_url ? '- vazio = usa a midia padrao do template' : '- OBRIGATORIO (template sem midia padrao; defina na aba Templates ou envie aqui)';
+    $('#bc-header-file').value = '';
+  }
 }
 $('#bc-account').addEventListener('change', (ev) => { Bc.account = ev.target.value; bcLoadTemplates(); });
 $('#bc-template').addEventListener('change', bcTemplateChanged);
@@ -927,7 +961,13 @@ $('#bc-send').addEventListener('click', async () => {
   if (!csv.trim()) return toast('Cole ou envie o CSV com os telefones.', 'error');
   const btn = $('#bc-send'); btn.disabled = true;
   try {
-    const r = await apiFetch('/api-oficial/broadcast', { method: 'POST', body: { account_id: Bc.account, list_name: $('#bc-list-name').value.trim(), template: { name: Bc.template.name, language: Bc.template.language }, csv, rate_per_sec: Number($('#bc-rate').value) } });
+    let header_media;
+    const hf = $('#bc-header-file').files[0];
+    if (tplNeedsMedia(Bc.template)) {
+      if (hf) header_media = { base64: await fileToBase64(hf), mime: hf.type || 'application/octet-stream', filename: hf.name };
+      else if (!Bc.template.header_media_url) { btn.disabled = false; return toast('Esse template tem cabecalho de midia: envie o arquivo ou defina a midia padrao na aba Templates.', 'error'); }
+    }
+    const r = await apiFetch('/api-oficial/broadcast', { method: 'POST', body: { account_id: Bc.account, list_name: $('#bc-list-name').value.trim(), template: { name: Bc.template.name, language: Bc.template.language }, csv, rate_per_sec: Number($('#bc-rate').value), ...(header_media ? { header_media } : {}) } });
     toast(`Disparo iniciado: ${r.total} contato(s)${r.invalid ? `, ${r.invalid} invalido(s) descartado(s)` : ''}`, 'ok');
     Bc.job = { job_id: r.job_id, total: r.total, sent: 0, failed: 0, skipped: 0, percent: 0, done: false };
     $('#bc-status').hidden = false; bcRenderJob(); bcStartPoll();

@@ -292,7 +292,7 @@ const WA_ERROR_HELP = {
   132001: { motivo: 'Template nao existe (nome/idioma errados) ou nao esta aprovado.', fix: 'Sincronize os templates e escolha um template APROVADO no idioma certo.' },
   132005: { motivo: 'Texto traduzido do template muito longo.', fix: 'Reduza o texto das variaveis.' },
   132007: { motivo: 'Conteudo do template viola politicas.', fix: 'Revise o texto do template e crie uma nova versao.' },
-  132012: { motivo: 'Formato de parametro invalido pro template.', fix: 'Variaveis nao podem ter quebras de linha, tabs ou mais de 4 espacos seguidos.' },
+  132012: { motivo: 'Formato de parametro nao bate com o template: quase sempre e um template com cabecalho de IMAGEM/VIDEO/DOCUMENTO enviado sem a midia (ou variavel com quebra de linha/tab).', fix: 'Na aba Templates, defina a midia padrao do cabecalho desse template (ou envie o arquivo no Disparo). Variaveis: sem quebras de linha, tabs ou mais de 4 espacos seguidos.' },
   132015: { motivo: 'Template pausado por baixa qualidade.', fix: 'Use outro template ou aguarde a reativacao.' },
   132016: { motivo: 'Template desativado por baixa qualidade.', fix: 'Crie um novo template com conteudo diferente.' },
   132068: { motivo: 'Fluxo (Flow) bloqueado.', fix: 'Revise o Flow no painel da Meta.' },
@@ -357,19 +357,61 @@ function normalizeContacts(list) {
   }
   return { contacts, invalid, duplicates };
 }
-// Monta os components do template a partir das variaveis da linha ({{1}} = var 1, ...)
-function buildTemplateComponents(cachedComponents, vars) {
+// Monta os components do template a partir das variaveis ({{1}} = var 1, ...) e da midia do cabecalho.
+const MEDIA_HEADER_FORMATS = ['IMAGE', 'VIDEO', 'DOCUMENT'];
+const templateHeader = (components) => (Array.isArray(components) ? components.find((c) => c.type === 'HEADER') : null);
+const templateNeedsMedia = (components) => MEDIA_HEADER_FORMATS.includes(String(templateHeader(components)?.format || '').toUpperCase());
+function buildTemplateComponents(cachedComponents, vars = [], headerMedia = null) {
   if (!Array.isArray(cachedComponents)) return [];
   const out = [];
   const count = (t) => (String(t || '').match(/\{\{\d+\}\}/g) || []).length;
-  const header = cachedComponents.find((c) => c.type === 'HEADER');
+  const header = templateHeader(cachedComponents);
   if (header && header.format === 'TEXT' && count(header.text) > 0) {
     out.push({ type: 'header', parameters: [{ type: 'text', text: String(vars[0] ?? '') }] });
+  } else if (header && MEDIA_HEADER_FORMATS.includes(String(header.format).toUpperCase()) && headerMedia?.url) {
+    const kind = String(header.format).toLowerCase();
+    const media = { link: headerMedia.url };
+    if (kind === 'document' && headerMedia.filename) media.filename = headerMedia.filename;
+    out.push({ type: 'header', parameters: [{ type: kind, [kind]: media }] });
   }
   const body = cachedComponents.find((c) => c.type === 'BODY');
   const n = body ? count(body.text) : 0;
   if (n > 0) out.push({ type: 'body', parameters: Array.from({ length: n }, (_, i) => ({ type: 'text', text: String(vars[i] ?? '') })) });
   return out;
+}
+async function getCachedTemplate(accountId, name, language) {
+  let q = sb.from('wa_templates').select('*').eq('account_id', accountId).eq('name', name);
+  if (language) q = q.eq('language', language);
+  const { data } = await q.order('language').limit(1);
+  return data?.[0] || null;
+}
+// Midia do cabecalho: a informada > a padrao do template > (ultimo caso) o exemplo da Meta se for URL
+function resolveHeaderMedia(cached, override) {
+  if (override?.url) return override;
+  if (cached?.header_media_url) return { url: cached.header_media_url, filename: cached.header_media_filename || undefined };
+  const ex = templateHeader(cached?.components)?.example?.header_handle?.[0];
+  if (typeof ex === 'string' && /^https?:\/\//.test(ex)) return { url: ex };
+  return null;
+}
+// Resolve { components } pra enviar um template: cache + vars + midia
+async function resolveTemplateSend(account, { name, language, vars = [], components, header_media_url, header_media_filename }) {
+  const cached = await getCachedTemplate(account.id, name, language);
+  const lang = language || cached?.language || 'pt_BR';
+  if (Array.isArray(components)) return { name, language: lang, components, cached };
+  const media = resolveHeaderMedia(cached, header_media_url ? { url: header_media_url, filename: header_media_filename } : null);
+  return { name, language: lang, components: buildTemplateComponents(cached?.components, vars, media), cached, media };
+}
+// Sobe um arquivo base64 no bucket wa-media e devolve a URL publica
+async function uploadBase64ToStorage(prefix, base64, mime, filename) {
+  let buf;
+  try { buf = Buffer.from(String(base64 || '').replace(/^data:[^;]+;base64,/, ''), 'base64'); } catch { buf = null; }
+  if (!buf?.length) { const e = new Error('MIDIA_INVALIDA'); e.code = 'MIDIA_INVALIDA'; throw e; }
+  const contentType = String(mime || 'application/octet-stream');
+  const safeName = String(filename || 'arquivo').replace(/[^a-zA-Z0-9._-]/g, '_');
+  const p = `${prefix}/${Date.now()}-${safeName}${safeName.includes('.') ? '' : '.' + extFromMime(contentType)}`;
+  const { error } = await sb.storage.from('wa-media').upload(p, buf, { contentType, upsert: true });
+  if (error) { const e = new Error('STORAGE_ERROR: ' + error.message); e.code = 'STORAGE_ERROR'; throw e; }
+  return { url: publicMediaUrl(p), path: p, mime: contentType, filename: filename || null, size: buf.length };
 }
 
 // ------------------------------------------------------------ [9b] disparo: jobs em memoria (anti-bug #5)
@@ -420,7 +462,7 @@ async function runBroadcast(job) {
         continue;
       }
       const conv = await ensureConversation(account, contact);
-      const components = buildTemplateComponents(job.tplComponents, c.vars);
+      const components = buildTemplateComponents(job.tplRow?.components, c.vars, job.headerMedia);
       const r = await waSendAndRecord({
         account, conversation: conv, contact, kind: 'template', sentBy: job.created_by_user,
         template: { name: job.template.name, language: job.template.language, components, preview: `[disparo ${job.list_name}: ${job.template.name}]` },
@@ -466,7 +508,7 @@ function validateFlow(b, { partial = false } = {}) {
       if (!Number.isFinite(delay) || delay < 0 || delay > MAX_FLOW_DELAY_S) return { error: 'DELAY_INVALIDO', detail: `passo ${i + 1}` };
       step.delay_s = delay;
       if (st.text && String(st.text).trim()) step.text = String(st.text).trim();
-      if (st.template?.name) step.template = { name: String(st.template.name).trim(), language: String(st.template.language || 'pt_BR').trim() };
+      if (st.template?.name) step.template = { name: String(st.template.name).trim(), language: String(st.template.language || 'pt_BR').trim(), ...(Array.isArray(st.template.vars) ? { vars: st.template.vars.map((v) => String(v)) } : {}) };
       const actions = Array.isArray(st.actions) ? st.actions : [];
       step.actions = [];
       for (const a of actions) {
@@ -504,7 +546,9 @@ async function waSendFlowStep(flow, step, ctx) {
   if (!conv) return;
   const contact = conv.contact; const account = ctx.account;
   if (step.template?.name) {
-    await waSendAndRecord({ account, conversation: conv, contact, kind: 'template', template: step.template, isFlow: true, flowId: flow.id });
+    const vars = (step.template.vars || []).map((v) => renderFlowText(v, contact));
+    const tpl = await resolveTemplateSend(account, { ...step.template, vars });
+    await waSendAndRecord({ account, conversation: conv, contact, kind: 'template', template: { name: tpl.name, language: tpl.language, components: tpl.components }, isFlow: true, flowId: flow.id });
   } else if (step.text) {
     const text = renderFlowText(step.text, contact);
     if (!windowOpen(conv)) { // anti-bug #12: fluxo tambem respeita a janela
@@ -749,7 +793,11 @@ app.register(async function apiOficial(api) {
     let result;
     try {
       if (b.template?.name) {
-        result = await waSendAndRecord({ account, conversation: conv, contact, kind: 'template', template: b.template, sentBy: req.user });
+        const tpl = await resolveTemplateSend(account, b.template);
+        if (!Array.isArray(b.template.components) && templateNeedsMedia(tpl.cached?.components) && !tpl.media) {
+          return httpError(reply, 400, 'TEMPLATE_PRECISA_DE_MIDIA', { detail: 'Defina a midia padrao do cabecalho desse template na aba Templates.' });
+        }
+        result = await waSendAndRecord({ account, conversation: conv, contact, kind: 'template', template: { name: tpl.name, language: tpl.language, components: tpl.components, preview: b.template.preview }, sentBy: req.user });
       } else {
         const text = String(b.text || '').trim();
         if (!text) return httpError(reply, 400, 'TEXTO_OBRIGATORIO');
@@ -844,6 +892,26 @@ app.register(async function apiOficial(api) {
     if (error) return dbFail(reply, error, 'templates cache');
     return data;
   });
+  // Midia padrao do cabecalho de um template do cache: { base64, mime, filename } | { url } | { url: null } (limpa)
+  api.post('/accounts/:id/templates/:tplId/header-media', async (req, reply) => {
+    const acc = await getAccount(req.params.id);
+    if (!acc) return httpError(reply, 404, 'CONTA_NAO_ENCONTRADA');
+    if (!isUuid(req.params.tplId)) return httpError(reply, 404, 'TEMPLATE_NAO_ENCONTRADO');
+    const { data: tpl } = await sb.from('wa_templates').select('*').eq('id', req.params.tplId).eq('account_id', acc.id).maybeSingle();
+    if (!tpl) return httpError(reply, 404, 'TEMPLATE_NAO_ENCONTRADO');
+    const b = req.body || {};
+    let patch;
+    if (b.base64) {
+      try { const up = await uploadBase64ToStorage(`templates/${acc.id}/${tpl.name}`, b.base64, b.mime, b.filename); patch = { header_media_url: up.url, header_media_path: up.path, header_media_filename: up.filename }; }
+      catch (e) { return httpError(reply, e.code === 'MIDIA_INVALIDA' ? 400 : 500, e.code || 'MIDIA_ERRO', { detail: e.message }); }
+    } else if (typeof b.url === 'string' && /^https?:\/\//.test(b.url)) patch = { header_media_url: b.url, header_media_path: null, header_media_filename: b.filename || null };
+    else if (b.url === null) patch = { header_media_url: null, header_media_path: null, header_media_filename: null };
+    else return httpError(reply, 400, 'MIDIA_OBRIGATORIA', { detail: 'Envie { base64, mime, filename } ou { url }' });
+    const { data, error } = await sb.from('wa_templates').update(patch).eq('id', tpl.id).select('*').single();
+    if (error) return dbFail(reply, error, 'template header media');
+    return data;
+  });
+
   api.post('/accounts/:id/templates', async (req, reply) => {
     const acc = await accountWithWaba(req, reply); if (!acc) return;
     const b = req.body || {};
@@ -903,10 +971,19 @@ app.register(async function apiOficial(api) {
     const { contacts, invalid, duplicates } = normalizeContacts(raw);
     if (!contacts.length) return httpError(reply, 400, 'LISTA_VAZIA', { invalid, duplicates, detail: 'Nenhum telefone valido (minimo 10 digitos).' });
     const rate = Math.min(50, Math.max(1, Number(b.rate_per_sec) || 5));
-    const { data: tplRow } = await sb.from('wa_templates').select('components').eq('account_id', account.id).eq('name', tplName).eq('language', tplLang).maybeSingle();
+    const tplRow = await getCachedTemplate(account.id, tplName, tplLang);
+    let headerMedia = null;
+    if (b.header_media?.base64) {
+      try { const up = await uploadBase64ToStorage(`broadcast/${account.id}`, b.header_media.base64, b.header_media.mime, b.header_media.filename); headerMedia = { url: up.url, filename: up.filename || undefined }; }
+      catch (e) { return httpError(reply, e.code === 'MIDIA_INVALIDA' ? 400 : 500, e.code || 'MIDIA_ERRO', { detail: e.message }); }
+    } else if (b.header_media_url) headerMedia = { url: String(b.header_media_url), filename: b.header_media_filename || undefined };
+    headerMedia = resolveHeaderMedia(tplRow, headerMedia);
+    if (templateNeedsMedia(tplRow?.components) && !headerMedia) {
+      return httpError(reply, 400, 'TEMPLATE_PRECISA_DE_MIDIA', { detail: `O template ${tplName} tem cabecalho de ${templateHeader(tplRow.components).format}. Defina a midia padrao na aba Templates ou envie o arquivo no disparo.` });
+    }
     const job = {
       id: `job-${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`,
-      account, account_id: account.id, list_name, template: { name: tplName, language: tplLang }, tplComponents: tplRow?.components || null,
+      account, account_id: account.id, list_name, template: { name: tplName, language: tplLang }, tplRow, headerMedia,
       contacts, total: contacts.length, sent: 0, failed: 0, skipped: 0, done: false, cancelled: false, errors: [],
       started_at: nowIso(), finished_at: null, rate, created_by: req.user.email, created_by_user: req.user,
     };
@@ -915,7 +992,7 @@ app.register(async function apiOficial(api) {
       for (const [id, j] of broadcastJobs) { if (j.done) { broadcastJobs.delete(id); if (broadcastJobs.size <= 100) break; } }
     }
     runBroadcast(job).catch((e) => { job.done = true; job.finished_at = nowIso(); job.error = String(e.message); app.log.error({ err: e }, 'runBroadcast'); }); // nao-awaited
-    return reply.code(202).send({ job_id: job.id, total: job.total, invalid, duplicates, list_name, template: job.template, rate_per_sec: rate });
+    return reply.code(202).send({ job_id: job.id, total: job.total, invalid, duplicates, list_name, template: job.template, rate_per_sec: rate, header_media_url: headerMedia?.url || null });
   });
   api.get('/broadcast', async () => [...broadcastJobs.values()].map(jobPublic).sort((a, b) => (a.started_at < b.started_at ? 1 : -1)));
   api.get('/broadcast/:jobId', async (req, reply) => {

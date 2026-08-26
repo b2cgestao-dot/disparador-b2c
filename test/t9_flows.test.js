@@ -160,3 +160,18 @@ test('T9: fluxo inativo ou de outra conta nao dispara; fluxo global (account_id 
     void inactive; void foreign; void global;
   } finally { await deleteAccount(other.id); }
 });
+
+test('T9: passo de template com variaveis ({{nome}}) e cabecalho de imagem usa a midia padrao', async () => {
+  await clearFlows();
+  const TINY_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+  const { data: tpl } = await sb.from('wa_templates').select('*').eq('account_id', acc.id).eq('name', 'promo_imagem').single();
+  await authed(`/api-oficial/accounts/${acc.id}/templates/${tpl.id}/header-media`, { method: 'POST', body: { base64: TINY_PNG, mime: 'image/png', filename: 'f.png' } });
+  await createFlow({ name: 'Manda imagem', trigger_text: 'Quero saber mais', steps: [{ template: { name: 'promo_imagem', language: 'pt_BR', vars: ['{{nome}}'] } }] });
+  const { convId, from, tplWamid } = await openWithTemplate('promo_botao', 'pt_BR', phone(), 'Bruna');
+  await simulateInbound({ phone_number_id: acc.phone_number_id, from, type: 'button', button_text: 'Quero saber mais', context_wamid: tplWamid });
+  const fm = await waitFor(async () => { const l = await flowMsgs(convId); return l.length ? l : null; }, { label: 'fluxo' });
+  assert.equal(fm[0].type, 'template'); assert.equal(fm[0].status, 'accepted');
+  const sent = (await mockMessages({ to: from })).filter((m) => m.type === 'template' && m.payload.template.name === 'promo_imagem')[0];
+  assert.equal(sent.payload.template.components.find((c) => c.type === 'header').parameters[0].image.link.length > 10, true);
+  assert.deepEqual(sent.payload.template.components.find((c) => c.type === 'body').parameters.map((x) => x.text), ['Bruna']);
+});

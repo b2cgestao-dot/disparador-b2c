@@ -176,3 +176,33 @@ test('T8: 9o digito BR - numero de 12 digitos no CSV vira canonico com 9 e nao d
   assert.equal(contacts.length, 1, 'sem contato duplicado'); assert.equal(contacts[0].id, c.id);
   assert.ok(contacts[0].tags.includes('nono digito'));
 });
+
+test('T8: template com cabecalho de IMAGEM - sem midia recusa (400); com midia padrao envia header image; midia da campanha sobrepoe', async () => {
+  const TINY_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+  const { data: tpl } = await sb.from('wa_templates').select('*').eq('account_id', acc.id).eq('name', 'promo_imagem').single();
+  await sb.from('wa_templates').update({ header_media_url: null, header_media_path: null }).eq('id', tpl.id);
+  const p1 = phone();
+  const semMidia = await authed('/api-oficial/broadcast', { method: 'POST', body: { account_id: acc.id, list_name: 'img', template: { name: 'promo_imagem', language: 'pt_BR' }, csv: `${p1},Ana`, rate_per_sec: 50 } });
+  assert.equal(semMidia.status, 400, JSON.stringify(semMidia.body));
+  assert.equal(semMidia.body.error, 'TEMPLATE_PRECISA_DE_MIDIA');
+  // midia padrao definida na aba Templates
+  const def = await authed(`/api-oficial/accounts/${acc.id}/templates/${tpl.id}/header-media`, { method: 'POST', body: { base64: TINY_PNG, mime: 'image/png', filename: 'padrao.png' } });
+  assert.equal(def.status, 200);
+  const r = await authed('/api-oficial/broadcast', { method: 'POST', body: { account_id: acc.id, list_name: 'img', template: { name: 'promo_imagem', language: 'pt_BR' }, csv: `${p1},Ana`, rate_per_sec: 50 } });
+  assert.equal(r.status, 202, JSON.stringify(r.body));
+  assert.equal(r.body.header_media_url, def.body.header_media_url);
+  const done = await pollUntilDone(r.body.job_id);
+  assert.equal(done.sent, 1, JSON.stringify(done.errors));
+  const sent = (await mockMessages({ to: p1 }))[0];
+  const header = sent.payload.template.components.find((c) => c.type === 'header');
+  assert.equal(header.parameters[0].type, 'image');
+  assert.equal(header.parameters[0].image.link, def.body.header_media_url);
+  assert.deepEqual(sent.payload.template.components.find((c) => c.type === 'body').parameters.map((x) => x.text), ['Ana']);
+  // midia especifica da campanha sobrepoe a padrao
+  const p2 = phone();
+  const r2 = await authed('/api-oficial/broadcast', { method: 'POST', body: { account_id: acc.id, list_name: 'img2', template: { name: 'promo_imagem', language: 'pt_BR' }, csv: `${p2},Bia`, rate_per_sec: 50, header_media: { base64: TINY_PNG, mime: 'image/png', filename: 'campanha.png' } } });
+  assert.equal(r2.status, 202, JSON.stringify(r2.body));
+  assert.ok(r2.body.header_media_url.includes('/wa-media/broadcast/'), r2.body.header_media_url);
+  await pollUntilDone(r2.body.job_id);
+  assert.equal((await mockMessages({ to: p2 }))[0].payload.template.components.find((c) => c.type === 'header').parameters[0].image.link, r2.body.header_media_url);
+});

@@ -103,3 +103,20 @@ test('T7: criar com cabecalho de midia: sobe pro Storage, reenvia pro mock e rec
   const { data: cached } = await sb.from('wa_templates').select('components').eq('account_id', acc.id).eq('name', name).single();
   assert.equal(cached.components.find((c) => c.type === 'HEADER').example.header_handle[0], r.body.header_handle);
 });
+
+test('T7: midia padrao do cabecalho - upload vai pro Storage e fica no cache do template', async () => {
+  const { data: tpl } = await sb.from('wa_templates').select('*').eq('account_id', acc.id).eq('name', 'promo_imagem').single();
+  assert.ok(tpl, 'promo_imagem sincronizado');
+  assert.equal(tpl.header_media_url, null);
+  const r = await authed(`/api-oficial/accounts/${acc.id}/templates/${tpl.id}/header-media`, { method: 'POST', body: { base64: TINY_PNG, mime: 'image/png', filename: 'banner.png' } });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.ok(r.body.header_media_url.includes('/storage/v1/object/public/wa-media/templates/'), r.body.header_media_url);
+  const pub = await fetch(r.body.header_media_url);
+  assert.equal(pub.status, 200);
+  const cache = await authed(`/api-oficial/accounts/${acc.id}/templates-cache`);
+  assert.equal(cache.body.find((t) => t.name === 'promo_imagem').header_media_url, r.body.header_media_url);
+  const byUrl = await authed(`/api-oficial/accounts/${acc.id}/templates/${tpl.id}/header-media`, { method: 'POST', body: { url: 'https://exemplo.com/banner.jpg' } });
+  assert.equal(byUrl.status, 200); assert.equal(byUrl.body.header_media_url, 'https://exemplo.com/banner.jpg');
+  const bad = await authed(`/api-oficial/accounts/${acc.id}/templates/${tpl.id}/header-media`, { method: 'POST', body: {} });
+  assert.equal(bad.status, 400);
+});

@@ -193,3 +193,33 @@ test('T6: 9o digito BR - envio vai pro numero COM 9, guarda o wa_id sem 9 e a re
   assert.equal(r2.status, 200);
   assert.equal((await mockMessages({ to: with9 })).length, 2, 'resposta tambem vai pro formato com 9');
 });
+
+test('T6: template com cabecalho de imagem no inbox - usa a midia padrao; sem midia padrao recusa; vars montam o corpo', async () => {
+  const TINY_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+  await authed(`/api-oficial/accounts/${acc.id}/sync-templates`, { method: 'POST' });
+  const { data: tpl } = await sb.from('wa_templates').select('*').eq('account_id', acc.id).eq('name', 'promo_imagem').single();
+  const { conv, from } = await openConversation();
+  const sem = await authed(`/api-oficial/conversations/${conv.id}/send`, { method: 'POST', body: { template: { name: 'promo_imagem', language: 'pt_BR', vars: ['Ana'] } } });
+  assert.equal(sem.status, 400); assert.equal(sem.body.error, 'TEMPLATE_PRECISA_DE_MIDIA');
+  await authed(`/api-oficial/accounts/${acc.id}/templates/${tpl.id}/header-media`, { method: 'POST', body: { base64: TINY_PNG, mime: 'image/png', filename: 'p.png' } });
+  const ok = await authed(`/api-oficial/conversations/${conv.id}/send`, { method: 'POST', body: { template: { name: 'promo_imagem', language: 'pt_BR', vars: ['Ana'] } } });
+  assert.equal(ok.status, 200, JSON.stringify(ok.body));
+  const sent = (await mockMessages({ to: from })).find((m) => m.type === 'template');
+  const comps = sent.payload.template.components;
+  assert.equal(comps.find((c) => c.type === 'header').parameters[0].type, 'image');
+  assert.deepEqual(comps.find((c) => c.type === 'body').parameters.map((x) => x.text), ['Ana']);
+  // template com cabecalho de TEXTO com variavel + corpo: vars preenchem os dois
+  const r2 = await authed(`/api-oficial/conversations/${conv.id}/send`, { method: 'POST', body: { template: { name: 'promo_botao', language: 'pt_BR', vars: ['Ana'] } } });
+  assert.equal(r2.status, 200, JSON.stringify(r2.body));
+  const s2 = (await mockMessages({ to: from })).filter((m) => m.type === 'template').pop();
+  assert.equal(s2.payload.template.components.find((c) => c.type === 'header').parameters[0].text, 'Ana');
+});
+
+test('T6: components explicitos com variaveis a menos -> Meta (mock) recusa com 132000 e a mensagem fica failed', async () => {
+  const { conv } = await openConversation();
+  const r = await authed(`/api-oficial/conversations/${conv.id}/send`, { method: 'POST', body: { template: { name: 'promo_botao', language: 'pt_BR', components: [{ type: 'body', parameters: [] }] } } });
+  assert.equal(r.status, 502, JSON.stringify(r.body));
+  assert.equal(r.body.code, 132000);
+  const { data: outs } = await sb.from('wa_messages').select('status, error').eq('conversation_id', conv.id).eq('direction', 'out');
+  assert.equal(outs[0].status, 'failed'); assert.equal(outs[0].error.code, 132000);
+});

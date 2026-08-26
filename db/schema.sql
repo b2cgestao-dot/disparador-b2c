@@ -259,3 +259,7 @@ alter table public.wa_flows add column if not exists match_text boolean not null
 -- 9o digito BR: a Meta identifica numeros brasileiros pelo formato SEM o 9 (wa_id). Guardamos os dois.
 alter table public.wa_contacts add column if not exists wa_id text;
 create index if not exists idx_wa_contacts_wa_id on public.wa_contacts (account_id, wa_id);
+-- Midia padrao do cabecalho de template (imagem/video/documento) usada nos envios
+alter table public.wa_templates add column if not exists header_media_url text;
+alter table public.wa_templates add column if not exists header_media_path text;
+alter table public.wa_templates add column if not exists header_media_filename text;

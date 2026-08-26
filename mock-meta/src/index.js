@@ -272,8 +272,27 @@ app.post('/:pnid/messages', async (req, reply) => {
     const lang = b.template?.language?.code;
     // valida contra os templates conhecidos de qualquer WABA (mock: qualquer waba)
     const all = [...state.templates.values()].flat();
-    if (all.length && !all.some((t) => t.name === name && (!lang || t.language === lang))) {
+    const def = all.find((t) => t.name === name && (!lang || t.language === lang));
+    if (all.length && !def) {
       return metaError(reply, { code: 132001, message: 'Template does not exist', details: `template name (${name}) does not exist in ${lang || 'any language'}` });
+    }
+    if (def) { // fidelidade a Meta: cabecalho de midia obrigatorio, contagem de variaveis do corpo
+      const comps = Array.isArray(b.template.components) ? b.template.components : [];
+      const header = (def.components || []).find((c) => c.type === 'HEADER');
+      const fmt = String(header?.format || '').toUpperCase();
+      if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(fmt)) {
+        const hp = comps.find((c) => String(c.type).toLowerCase() === 'header')?.parameters?.[0];
+        const kind = fmt.toLowerCase();
+        if (!hp || String(hp.type).toLowerCase() !== kind || !(hp[kind]?.link || hp[kind]?.id)) {
+          return metaError(reply, { code: 132012, message: 'Parameter format does not match format in the created template', details: `header: Format mismatch, expected ${fmt}, received ${hp ? String(hp.type).toUpperCase() : 'UNKNOWN'}` });
+        }
+      }
+      const bodyDef = (def.components || []).find((c) => c.type === 'BODY');
+      const expected = (String(bodyDef?.text || '').match(/\{\{\d+\}\}/g) || []).length;
+      const got = comps.find((c) => String(c.type).toLowerCase() === 'body')?.parameters?.length || 0;
+      if (expected !== got) {
+        return metaError(reply, { code: 132000, message: 'Number of parameters does not match the expected number of params', details: `body: number of localizable_params (${got}) does not match the expected number of params (${expected})` });
+      }
     }
   }
   const wamid = `wamid.MOCK-${rand(10)}`;
