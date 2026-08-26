@@ -1,7 +1,7 @@
 // T3 - Front esqueleto + Auth (Chrome headless real via CDP).
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { API, SEED } from './helpers.mjs';
+import { API, SEED, SUPABASE_URL } from './helpers.mjs';
 import { launchBrowser } from './browser.mjs';
 
 let browser, page;
@@ -21,6 +21,7 @@ test('T3: a pagina carrega sem erro de console', async () => {
   const c = JSON.parse(cfg);
   assert.equal(c.API_URL, '/api');
   assert.match(c.SUPABASE_URL, /^https?:\/\//);
+  assert.equal(c.SUPABASE_URL, SUPABASE_URL, 'backend injeta SUPABASE_PUBLIC_URL/ANON_KEY do ambiente no index.html');
   assert.ok(await page.eval('typeof sb === "object" && !!sb.auth'), 'cliente supabase (sb) existe');
 });
 

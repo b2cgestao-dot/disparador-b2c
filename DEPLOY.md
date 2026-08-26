@@ -13,7 +13,41 @@
 | Banco/Auth/Realtime/Storage | Supabase (projeto de producao) | `db/schema.sql` no SQL Editor |
 | Meta | Graph API real | `META_BASE_URL=https://graph.facebook.com` |
 
-## 1. Pre-requisitos (uma vez)
+## 0.1 Caminho RECOMENDADO: VPS com Dokploy (Hostinger KVM) - sem Caddy
+
+O Dokploy ja traz Traefik (portas 80/443, HTTPS automatico). Nao suba o Caddy
+nele. O `Dockerfile` da RAIZ empacota backend + front num container so; o
+backend serve o `index.html` e injeta `SUPABASE_URL`/`SUPABASE_ANON_KEY` do
+ambiente (nao precisa editar o arquivo).
+
+1. **DNS**: registro **A** `painel` -> IP da VPS (ex.: `painel.seudominio.com.br`).
+   Sem dominio ainda? Use `painel.<IP-com-tracos>.sslip.io` (ex.: `painel.187-77-1-2.sslip.io`)
+   como dominio temporario - funciona com HTTPS.
+2. Dokploy (`http://IP:3000`) -> **Projects -> Create Project** `disparador`.
+3. Dentro do projeto -> **Create Service -> Application**:
+   - **Provider**: Git (ou GitHub) -> `https://github.com/b2cgestao-dot/disparador-b2c.git`, branch `main`.
+   - **Build Type**: `Dockerfile` -> Dockerfile path `Dockerfile`, build context `.`
+4. Aba **Environment** (cole os valores de `.env.production`):
+   ```
+   NODE_ENV=production
+   PORT=3000
+   SUPABASE_URL=https://sdnciriewxconxyoehwo.supabase.co
+   SUPABASE_ANON_KEY=<anon de .env.production>
+   SUPABASE_SERVICE_KEY=<service_role de .env.production>
+   META_BASE_URL=https://graph.facebook.com
+   META_API_VERSION=v21.0
+   ```
+5. Aba **Domains -> Add Domain**: host `painel.seudominio.com.br`, **Container Port 3000**,
+   HTTPS ligado, certificado Let's Encrypt.
+6. **Deploy**. Acompanhe em Logs. Teste: `https://painel.../health` deve mostrar
+   `"meta_base_url":"https://graph.facebook.com"`.
+7. Siga a secao 5 (conectar a Meta): a conta ja esta cadastrada no banco; falta o webhook
+   `https://painel.../whatsapp/webhook` + verify token (em `.env.meta`) e assinar `messages`.
+8. Atualizacoes: `git push` na `main` + **Deploy** no Dokploy (ou ligue Auto Deploy por webhook do GitHub).
+
+Recursos: o container usa ~100 MB de RAM; KVM 4 sobra.
+
+## 1. Pre-requisitos (uma vez) - caminho alternativo SEM Dokploy (Caddy)
 
 1. VPS Linux (Ubuntu 22.04+, 1-2 GB RAM) com IP publico. Portas 80 e 443 abertas.
 2. Dominio com registro **A** `painel` -> IP da VPS (ex.: `painel.exemplo.com.br`).

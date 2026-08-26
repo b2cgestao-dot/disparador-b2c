@@ -14,6 +14,7 @@ services:
       SUPABASE_URL: ${SUPABASE_URL_DOCKER:-http://host.docker.internal:54321}
       SUPABASE_PUBLIC_URL: ${SUPABASE_URL:-http://127.0.0.1:54321}
       SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:?defina SUPABASE_SERVICE_KEY no .env}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
       META_BASE_URL: ${META_BASE_URL:-http://mock-meta:4000}
       META_API_VERSION: ${META_API_VERSION:-v21.0}
       WEB_DIR: /app/web

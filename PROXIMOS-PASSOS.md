@@ -31,7 +31,12 @@ pedir pro agente fazer.
 8. Se for usar numero real fora do modo de teste: verificar o negocio e
    publicar uma URL de **Politica de Privacidade**.
 
-## Fase 3 - VPS + dominio [VOCE]
+## Fase 3 - VPS + dominio [VOCE] - VPS Hostinger KVM 4 com Dokploy JA CONTRATADA (2026-08-26)
+
+Falta so o **dominio**: registro A `painel` -> IP da VPS (ou usar `painel.<IP-com-tracos>.sslip.io` temporario).
+Deploy via Dokploy: ver `DEPLOY.md` secao 0.1 (Application a partir do GitHub, Dockerfile da raiz, env do `.env.production`, dominio na porta 3000).
+
+## Fase 3 (original) - VPS + dominio [VOCE]
 
 1. Contratar VPS Linux (Ubuntu 22.04+, 1-2 GB RAM, ex.: Hetzner/DigitalOcean/
    Contabo). Anotar IP publico e liberar portas 22, 80 e 443.

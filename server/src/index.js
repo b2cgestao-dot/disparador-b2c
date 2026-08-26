@@ -1155,11 +1155,20 @@ app.post('/whatsapp/webhook', async (req, reply) => {
 
 // ------------------------------------------------------------ [11] static web
 // Em producao o Caddy serve o web/index.html; localmente o backend serve pra facilitar.
+// Se SUPABASE_ANON_KEY estiver no ambiente, injeta URL publica + anon key no topo do
+// index.html ao servir: o mesmo arquivo funciona local (mock) e em producao sem editar.
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || '';
 function serveIndex(req, reply) {
   const file = path.join(WEB_DIR, 'index.html');
   if (!fs.existsSync(file)) return httpError(reply, 404, 'INDEX_NAO_ENCONTRADO', { web_dir: WEB_DIR });
+  let html = fs.readFileSync(file, 'utf8');
+  if (SUPABASE_ANON_KEY && SUPABASE_PUBLIC_URL) {
+    html = html
+      .replace(/const SUPABASE_URL = '[^']*';/, `const SUPABASE_URL = '${SUPABASE_PUBLIC_URL}';`)
+      .replace(/const SUPABASE_ANON_KEY = '[^']*';/, `const SUPABASE_ANON_KEY = '${SUPABASE_ANON_KEY}';`);
+  }
   reply.header('Cache-Control', 'no-cache, no-store, must-revalidate');
-  return reply.type('text/html; charset=utf-8').send(fs.readFileSync(file));
+  return reply.type('text/html; charset=utf-8').send(html);
 }
 app.get('/', serveIndex);
 app.get('/index.html', serveIndex);
